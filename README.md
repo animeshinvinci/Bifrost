@@ -14,12 +14,12 @@ Getting Started
 ====
 
 This assumes that you have RabbitMQ installed locally and have the management UI plugin installed and running.
-
-1. Ensure that a local instance of RabbitMQ is running and use your browser to navigate to [The RabbitMQ UI](http://localhost:15672/#/).
-2. Using the RabbitMQ Admin UI, click on the 'Queues' tab at the top of the screen.
-3. If it is not already present, create a queue with the name 'streams-playground'.
-4. Once the queue has been created, click on the queue name to view its details and send messages manually using the UI.
-5. To send a message to the queue simply enter some information in the 'Payload' box of the UI and click publish message.
-6. If you have the application running then you will see the message appear in the console. 
+1. Run 'Start.scala' from IntelliJ (or sbt run from the console).
+2. Ensure that a local instance of RabbitMQ is running and use your browser to navigate to [The RabbitMQ UI](http://localhost:15672/#/).
+3. Using the RabbitMQ Admin UI, click on the 'Queues' tab at the top of the screen.
+4. If it is not already present, create a queue with the name 'streams-playground'.
+5. Once the queue has been created, click on the queue name to view its details and send messages manually using the UI.
+6. To send a message to the queue simply enter some information in the 'Payload' box of the UI and click publish message.
+7. If you have the application running then you will see the message appear in the console. 
 
 
