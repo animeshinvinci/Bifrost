@@ -1,7 +1,8 @@
 package com.datinko.asgard.bifrost
 
 import akka.actor.{DeadLetter, Props, ActorSystem}
-import akka.stream.FlowMaterializer
+import akka.stream.ActorMaterializer
+
 import akka.stream.scaladsl.{Sink, Source}
 import io.scalac.amqp.{Message, Connection}
 
@@ -13,7 +14,7 @@ object Start extends App {
   implicit val system = ActorSystem("bifrost")
   val deadLettersSubscriber = system.actorOf(Props[EchoActor], name = "dead-letters-subscriber")
 
-  implicit val flowMaterializer = FlowMaterializer()
+  implicit val materializer = ActorMaterializer()
 
   val connection = Connection()
   val trialMessages = "Message 1" :: "Message 2" :: "Message 3" :: "Message 4" :: "Message 5" :: Nil
@@ -22,7 +23,7 @@ object Start extends App {
   system.eventStream.subscribe(deadLettersSubscriber, classOf[DeadLetter])
 
   //Fire a set of messages at our Rabbit instance, wait a while and then consume them...
-  SimpleRabbitProducer.produce(flowMaterializer)
+  SimpleRabbitProducer.produce(materializer)
   Thread.sleep(2000)
   SimpleRabbitConsumer.consume.run()
 

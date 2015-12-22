@@ -1,9 +1,9 @@
 package com.datinko.asgard.bifrost
 
+import _root_.io.scalac.amqp._
 import akka.stream._
 import com.typesafe.scalalogging.LazyLogging
 import scaladsl._
-import io.scalac.amqp._
 
 /**
   * A Simple RabbitMQ consumer that connects to a queue and processes the messages received.
@@ -19,11 +19,13 @@ object SimpleRabbitConsumer extends LazyLogging {
 
   def extractSentHeaderAndBody(delivery: Delivery): String = {
 
-    "sent: " + delivery.message.headers("sent") + " - body:" + delivery.message.body.utf8String
+    // 'new String' feels wrong for scala.. not sure how else to do this..
+    "sent: " + delivery.message.headers("sent") + " - body:" + new String(delivery.message.body.toArray)
+    //"blah"
   }
 
   def consume() = {
-    Source(connection.consume("streams-playground"))
+    Source.fromPublisher(connection.consume("streams-playground"))
       .map(extractSentHeaderAndBody(_))
       .map(println(_))
       .to(Sink.ignore)  //this wont start consuming until run() is called.

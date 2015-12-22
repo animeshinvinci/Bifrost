@@ -44,3 +44,6 @@ http://www.smartjava.org/content/visualizing-back-pressure-and-reactive-streams-
 (Go here next - some nice classes for simulating slow consumers etc)
 
 
+This project has been updated to Akka Stream 2.0.  This means some changes and Reactive Rabbit may not play nicely.
+
+See [Akka Streams 2 Docs](http://doc.akka.io/docs/akka-stream-and-http-experimental/2.0/scala.html) for more details.

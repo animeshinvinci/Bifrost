@@ -2,11 +2,11 @@ package com.datinko.asgard.bifrost
 
 import java.util.Calendar
 
-import akka.stream._
+import _root_.io.scalac.amqp.{Message, Connection}
+import akka.stream.{SourceShape, ActorMaterializer}
 import akka.util.ByteString
 import com.typesafe.scalalogging.LazyLogging
-import scaladsl._
-import io.scalac.amqp._
+import akka.stream.scaladsl._
 
 /**
   * A simple RabbitMQProducer to send a defined series of messages to a RabbitMQ Exchange.
@@ -24,12 +24,14 @@ object SimpleRabbitProducer extends LazyLogging {
 
   //if we want to be able to execute the flow from inside this object then we need to pass in a flowMaterializer
   //(if we remove the 'run' then we dont need the materializer)
-  def produce(implicit flowMaterializer: FlowMaterializer) = {
+  def produce(implicit flowMaterializer: ActorMaterializer) = {
 
     Source(trialMessages)
       .map(message => Message(ByteString(message), headers = Map("sent" -> Calendar.getInstance().getTime().toString)))
-      .to(Sink(exchange))
+      .to(Sink.fromSubscriber(exchange))
       .run()
   }
+
+
 
 }
