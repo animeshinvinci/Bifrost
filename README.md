@@ -14,12 +14,33 @@ Getting Started
 ====
 
 This assumes that you have RabbitMQ installed locally and have the management UI plugin installed and running.
-1. Run 'Start.scala' from IntelliJ (or sbt run from the console).
-2. Ensure that a local instance of RabbitMQ is running and use your browser to navigate to [The RabbitMQ UI](http://localhost:15672/#/).
-3. Using the RabbitMQ Admin UI, click on the 'Queues' tab at the top of the screen.
-4. If it is not already present, create a queue with the name 'streams-playground'.
-5. Once the queue has been created, click on the queue name to view its details and send messages manually using the UI.
-6. To send a message to the queue simply enter some information in the 'Payload' box of the UI and click publish message.
-7. If you have the application running then you will see the message appear in the console. 
+1. Ensure that a local instance of RabbitMQ is running and use your browser to navigate to [The RabbitMQ UI](http://localhost:15672/#/).
+2. Using the RabbitMQ Admin UI, click on the 'Exchanges' tab at the top of the screen.
+3. If it is not already present, create an exchange with the name 'streams-playground'.
+4. Using the RabbitMQ Admin UI, click on the 'Queues' tab at the top of the screen.
+5. If it is not already present, create a queue with the name 'streams-playground'.
+6. Go back to the 'streams-playground' exchange entry.
+7. Use the UI to add a binding to the exchange to bind it to the 'streams-playground' queue.  This ensures that the 
+   messages that are sent to the exchange are sent to the queue.
+8. Once the exchange has been created and bound to the queue, click on the exchange name to view its details and send 
+   messages manually using the UI.
+9. To send a message to the exchange simply enter some information in the 'Payload' box of the UI and click publish 
+   message.
+6. Run 'Start.scala' from IntelliJ (or sbt run from the console).
+7. You will see the message headers with their bodies appear in the console as they are sent the exchange and receieved 
+   by the queue.
+   
+Supporting Sources
+===
+
+Bits of this implementation have been borrowed from the following interesting souces:
+
+https://github.com/ScalaConsultants/reactive-rabbit
+http://blog.michaelhamrah.com/2015/01/a-gentle-introduction-to-akka-streams/
+http://blog.michaelhamrah.com/2015/01/adding-http-server-side-events-to-akka-streams/
+https://github.com/jczuchnowski/rabbitmq-akka-stream/blob/master/src/main/scala/io/scalac/rabbit/ConsumerApp.scala
+
+http://www.smartjava.org/content/visualizing-back-pressure-and-reactive-streams-akka-streams-statsd-grafana-and-influxdb
+(Go here next - some nice classes for simulating slow consumers etc)
 
 
