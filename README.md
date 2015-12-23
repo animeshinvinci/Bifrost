@@ -12,8 +12,8 @@ the two technologies.
 
 Getting Started
 ====
-
 This assumes that you have RabbitMQ installed locally and have the management UI plugin installed and running.
+
 1. Ensure that a local instance of RabbitMQ is running and use your browser to navigate to [The RabbitMQ UI](http://localhost:15672/#/).
 2. Using the RabbitMQ Admin UI, click on the 'Exchanges' tab at the top of the screen.
 3. If it is not already present, create an exchange with the name 'streams-playground'.
