@@ -23,7 +23,8 @@ object Start extends App {
   system.eventStream.subscribe(deadLettersSubscriber, classOf[DeadLetter])
 
   //Fire a set of messages at our Rabbit instance, wait a while and then consume them...
-  SimpleRabbitProducer.produce(materializer)
+  //SimpleRabbitProducer.produceAsFastAsPossible(materializer)
+  SimpleRabbitProducer.produceAtControlledRate(materializer)
   Thread.sleep(2000)
   SimpleRabbitConsumer.consume.run()
 
