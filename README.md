@@ -47,3 +47,49 @@ http://www.smartjava.org/content/visualizing-back-pressure-and-reactive-streams-
 This project has been updated to Akka Stream 2.0.  This means some changes and Reactive Rabbit may not play nicely.
 
 See [Akka Streams 2 Docs](http://doc.akka.io/docs/akka-stream-and-http-experimental/2.0/scala.html) for more details.
+
+
+Phase Two - Monitoring
+===
+
+Being able to create reactive components that are able to create and respond to backpressure is great.  However, we need
+to be able to see this reactive backpressure in action.  To achieve this we'll add some monitoring to our application 
+using Kamon.  
+
+Kamon allows us to see some useful performance metrics about Akka systems.  Kamon simply gathers these metrics and then
+sends them to other components for aggregation and presentation.  One of the bets tools for aggregating these metrics
+is the StatsD package.  For presentation we'll use the Graphite dashboarding system.  To get these componenets up and
+running toether with all the supporting components can take some time.  Thankfully a clever soul has already made a 
+docker image of all the things we need. To get your mitts on it and get it up and running, use:
+
+docker run -p 80:80 -p 8125:8125/udp -p 8126:8126 -p 8083:8083 -p 8086:8086 -p 8084:8084 --name kamon-grafana-dashboard muuki88/grafana_graphite:latest
+
+Once docker has done its thing you can see the dashboard at 'localhost:80' (if you are using on windows or mac using
+Docker Toolbox remember that your default IP will not be localhost or 127.0.0.1 - its likely to be http://192.168.99.100).
+
+Fire up the application (you must use 'sbt run' and it will start to collect stats from the running application and send them
+to StatsD, from where Grafana can get them.
+
+If you fire up grafana (http://192.168.99.100/#/dashboard/file/default.json) then click on the title of the chart 
+that is shown at the bottom of the page, you can click 'Edit' from the menu that appears.
+
+If you take a look at the query that is shown at the bottom of the page that appears you will be able to navigate
+through the list of recorded metrics.
+
+Navigate down to:
+ 'stats | timers | Bifrost | <Machine Name> | akka-actor | kamon_user_a | time-in-mailbox | mean
+
+and enjoy a pretty graph of the mean time that messages stay in the mail box of the producer.
+
+** NEED TO INSERT THE NEW DEPENDENCIES HERE AS WELL AS THE PLUGINS AND THE ASSOCIATED CONFIG FOR ASPECTJ **
+
+
+Next - 
+
+1. Add some meaningful metrics.
+2. Create fast/slow producers and consumers.
+3. Make graphs of their performance to illustate it all in motion.
+4. Clean up the docs.
+5. Make a presentation!
+
+

@@ -1,17 +1,21 @@
 package com.datinko.asgard.bifrost
 
 import akka.actor.{DeadLetter, Props, ActorSystem}
-import akka.stream.ActorMaterializer
+import akka.stream.{ActorMaterializerSettings, ActorMaterializer}
 
 import akka.stream.scaladsl.{Sink, Source}
 import io.scalac.amqp.{Message, Connection}
+import kamon.Kamon
+
 
 /**
   * Created by Neil on 19/12/2015.
   */
 object Start extends App {
 
-  implicit val system = ActorSystem("bifrost")
+  Kamon.start()
+
+  implicit val system = ActorSystem("Bifrost")
   val deadLettersSubscriber = system.actorOf(Props[EchoActor], name = "dead-letters-subscriber")
 
   implicit val materializer = ActorMaterializer()
@@ -25,7 +29,7 @@ object Start extends App {
   //Fire a set of messages at our Rabbit instance, wait a while and then consume them...
   //SimpleRabbitProducer.produceAsFastAsPossible(materializer)
   SimpleRabbitProducer.produceAtControlledRate(materializer)
-  Thread.sleep(2000)
+  //Thread.sleep(2000)
   SimpleRabbitConsumer.consume.run()
 
 
