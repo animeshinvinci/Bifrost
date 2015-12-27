@@ -4,6 +4,7 @@ import akka.actor.{DeadLetter, Props, ActorSystem}
 import akka.stream.{ActorMaterializerSettings, ActorMaterializer}
 
 import akka.stream.scaladsl.{Sink, Source}
+import com.datinko.asgard.bifrost.actors.EchoActor
 import io.scalac.amqp.{Message, Connection}
 import kamon.Kamon
 
@@ -28,9 +29,10 @@ object Start extends App {
 
   //Fire a set of messages at our Rabbit instance, wait a while and then consume them...
   //SimpleRabbitProducer.produceAsFastAsPossible(materializer)
-  SimpleRabbitProducer.produceAtControlledRate(materializer)
-  //Thread.sleep(2000)
-  SimpleRabbitConsumer.consume.run()
+  //SimpleRabbitProducer.produceAtControlledRate(materializer)
+  ////Thread.sleep(2000)
+  //SimpleRabbitConsumer.consume.run()
 
+  Scenarios.fastPublisherFastSubscriber(materializer)
 
 }

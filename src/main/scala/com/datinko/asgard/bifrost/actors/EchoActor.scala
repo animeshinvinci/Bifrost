@@ -1,7 +1,6 @@
-package com.datinko.asgard.bifrost
+package com.datinko.asgard.bifrost.actors
 
 import akka.actor.Actor
-import akka.actor.Actor.Receive
 
 /**
   * A simple actor that echo's the messages it recieves to the console.

@@ -73,5 +73,39 @@ object SimpleRabbitProducer extends LazyLogging {
   }
 
 
+//This needs to changed to be a reuseable SourceShape...
+  def produceThrottled(implicit materializer: ActorMaterializer, initialDelay: FiniteDuration, interval: FiniteDuration, numberOfMessages: Int, name: String) = {
+
+    val ticker = Source.tick(initialDelay, interval, Tick)
+    val numbers = 1 to numberOfMessages
+    val rangeMessageSource = Source(numbers.map(message => Message(ByteString(message), headers = Map("created" -> Calendar.getInstance().getTime().toString))))
+
+    //define a stream to bring it all together..
+    val throttledStream = Source.fromGraph(GraphDSL.create() { implicit builder =>
+
+      //import this so we can use the ~> syntax
+      import GraphDSL.Implicits._
+
+      //define a zip operaton that expects a tuple with a Tick and a Message in it..
+      //(Note that the operations must be added to the builder before they can be used)
+      val zip = builder.add(Zip[Tick.type, Message])
+      val flow = builder.add(Flow[(Tick.type, Message)].map(_._2))
+
+      //define the inputs for the zip function - it wont fire until something arrives at both inputs, so we are essentially
+      //throttling the output of this steam
+      ticker ~> zip.in0
+      rangeMessageSource ~> zip.in1
+
+      //send the output of our zip operation to a processing flow that just allows us to take the second element of each Tuple, in our case
+      //this is the AMQP message, we dont care about the Tick, it was just for timing and we can throw it away.
+      //route that to the 'out' Sink, the RabbitMQ exchange.
+      zip.out ~> flow
+
+      SourceShape(flow.out)
+    })
+    throttledStream
+  }
+
+
 
 }

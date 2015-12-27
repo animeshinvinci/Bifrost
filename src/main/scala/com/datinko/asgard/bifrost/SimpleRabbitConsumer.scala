@@ -20,7 +20,7 @@ object SimpleRabbitConsumer extends LazyLogging {
   def extractSentHeaderAndBody(delivery: Delivery): String = {
 
     // 'new String' feels wrong for scala.. not sure how else to do this..
-    "sent: " + delivery.message.headers("sent") + " - body:" + new String(delivery.message.body.toArray)
+    "sent: " + delivery.message.headers("created") + " - body:" + new String(delivery.message.body.toArray)
     //"blah"
   }
 
