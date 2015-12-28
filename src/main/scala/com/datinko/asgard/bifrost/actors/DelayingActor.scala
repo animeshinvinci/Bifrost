@@ -29,7 +29,7 @@ class DelayingActor(name: String, delay: Long) extends ActorSubscriber with Lazy
     case OnNext(msg: Message) =>
       Thread.sleep(delay)
       logger.debug(s"Message in delaying actor sink ${self.path} '$actorName': $msg")
-      consumeCounter.increment()
+      consumeCounter.increment(1)
 
 
     //println(s"In delaying actor sink $actorName: $msg")

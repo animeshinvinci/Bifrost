@@ -39,7 +39,7 @@ object ThrottledProducer extends LazyLogging {
       val messageExtractorFlow = builder.add(Flow[(Tick.type, Message)].map(_._2))
 
       //create a flow to log performance information to Kamon and pass on the message object unmolested
-      val statsDExporterFlow = builder.add(Flow[(Message)].map{message => createCounter.increment(); message})
+      val statsDExporterFlow = builder.add(Flow[(Message)].map{message => createCounter.increment(1); message})
 
       //define the inputs for the zip function - it wont fire until something arrives at both inputs, so we are essentially
       //throttling the output of this steam

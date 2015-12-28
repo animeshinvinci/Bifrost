@@ -34,9 +34,9 @@ class SlowDownActor(name: String, delayPerMsg: Long, initialDelay: Long) extends
       delay += delayPerMsg
       Thread.sleep(initialDelay + (delay / 1000), delay % 1000 toInt)
       logger.debug(s"Message in slowdown actor sink ${self.path} '$actorName': $msg")
-      consumeCounter.increment()
+      consumeCounter.increment(1)
     case _ =>
-      logger.debug(s"Unknown message in  $actorName: ")
+      logger.debug(s"Unknown message in $actorName: ")
 
   }
 }
