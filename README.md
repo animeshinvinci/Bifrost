@@ -63,6 +63,9 @@ running toether with all the supporting components can take some time.  Thankful
 docker image of all the things we need. To get your mitts on it and get it up and running, use:
 
 docker run -p 80:80 -p 8125:8125/udp -p 8126:8126 -p 8083:8083 -p 8086:8086 -p 8084:8084 --name kamon-grafana-dashboard muuki88/grafana_graphite:latest
+==Alternative KaMon/Graphite/Grafana image is here: - This image seems to have more charts configured but no real data?
+//http://kamon.io/teamblog/2014/04/27/get-started-quicker-with-our-docker-image/
+//docker run -d -p 80:80 -p 8125:8125/udp -p 8126:8126 --name kamon-grafana-dashboard kamon/grafana_graphite
 
 Once docker has done its thing you can see the dashboard at 'localhost:80' (if you are using on windows or mac using
 Docker Toolbox remember that your default IP will not be localhost or 127.0.0.1 - its likely to be http://192.168.99.100).

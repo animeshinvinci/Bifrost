@@ -33,6 +33,7 @@ object Start extends App {
   ////Thread.sleep(2000)
   //SimpleRabbitConsumer.consume.run()
 
-  Scenarios.fastPublisherFastSubscriber(materializer).run()
+  //Scenarios.fastPublisherFastSubscriber(materializer).run()
+  Scenarios.fastPublisherSlowingSubscriber(materializer).run()
 
 }
