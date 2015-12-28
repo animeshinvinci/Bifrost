@@ -7,7 +7,7 @@ import _root_.io.scalac.amqp.{Message}
 import kamon.Kamon
 
 /**
- * Created by neild on 28/12/2015.
+ * An actor that progressively slows as it processes messages.
  */
 class SlowDownActor(name: String, delayPerMsg: Long, initialDelay: Long) extends ActorSubscriber with LazyLogging {
   override protected def requestStrategy: RequestStrategy = OneByOneRequestStrategy
@@ -35,8 +35,8 @@ class SlowDownActor(name: String, delayPerMsg: Long, initialDelay: Long) extends
       Thread.sleep(initialDelay + (delay / 1000), delay % 1000 toInt)
       logger.debug(s"Message in slowdown actor sink ${self.path} '$actorName': $msg")
       consumeCounter.increment(1)
-    case _ =>
-      logger.debug(s"Unknown message in $actorName: ")
+    case msg =>
+      logger.debug(s"Unknown message $msg in $actorName: ")
 
   }
 }
