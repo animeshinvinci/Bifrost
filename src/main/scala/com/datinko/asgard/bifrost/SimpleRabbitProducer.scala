@@ -3,7 +3,7 @@ package com.datinko.asgard.bifrost
 import java.util.Calendar
 
 import _root_.io.scalac.amqp.{Message, Connection}
-import akka.stream.{ClosedShape, SourceShape, ActorMaterializer}
+import akka.stream.{ClosedShape, ActorMaterializer}
 import akka.util.ByteString
 import com.typesafe.scalalogging.LazyLogging
 import akka.stream.scaladsl._

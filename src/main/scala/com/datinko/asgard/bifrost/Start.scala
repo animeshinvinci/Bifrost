@@ -5,6 +5,7 @@ import akka.stream.{ActorMaterializerSettings, ActorMaterializer}
 
 import akka.stream.scaladsl.{Sink, Source}
 import com.datinko.asgard.bifrost.actors.EchoActor
+import com.datinko.asgard.bifrost.tutorial.SimpleStreams
 import io.scalac.amqp.{Message, Connection}
 import kamon.Kamon
 
@@ -36,6 +37,8 @@ object Start extends App {
   //Scenarios.fastPublisherFastSubscriber(materializer).run()
   //Scenarios.fastPublisherSlowingSubscriber(materializer).run()
   //Scenarios.fastPublisherSlowingSubscriberWithDropBuffer(materializer).run()
-  Scenarios.fastPublisherSlowingSubscriberWithBackPressure(materializer).run()
+  //Scenarios.fastPublisherSlowingSubscriberWithBackPressure(materializer).run()
+
+  SimpleStreams.printSimpleMessagesToConsole(materializer)
 
 }

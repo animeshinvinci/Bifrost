@@ -10,7 +10,6 @@ scalaVersion := "2.11.7"
 val akka            = "2.3.12"  //need this for reactive rabbit
 val reactiveRabbit  = "1.0.3"
 val akkaStream      = "2.0"
-//val kamonVersion    = "0.3.4"
 val kamonVersion    = "0.5.2"
 
 /* dependencies */

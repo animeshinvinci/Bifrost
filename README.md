@@ -33,7 +33,7 @@ This assumes that you have RabbitMQ installed locally and have the management UI
 Supporting Sources
 ===
 
-Bits of this implementation have been borrowed from the following interesting souces:
+Bits of this implementation have been borrowed from the following interesting sources:
 
 https://github.com/ScalaConsultants/reactive-rabbit
 http://blog.michaelhamrah.com/2015/01/a-gentle-introduction-to-akka-streams/
