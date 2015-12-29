@@ -46,6 +46,7 @@ since there have been some significant class renaming.
 
 Our starting ```build.sbt``` has the following content:
 
+```scala
     name := "Bifrost"
     
     version := "1.0"
@@ -72,7 +73,7 @@ Our starting ```build.sbt``` has the following content:
         // -- Config --
         ,"com.typesafe" % "config" % "1.2.1"
     )
-
+```
 
 The Basics - Code
 ===
@@ -90,13 +91,13 @@ object SimpleStreams {
 
 def printSimpleMessagesToConsole(implicit materializer: ActorMaterializer) = {
 
-val simpleMessages = "Message 1" :: "Message 2" :: "Message 3" :: "Message 4" :: "Message 5" :: Nil
+   val simpleMessages = "Message 1" :: "Message 2" :: "Message 3" :: "Message 4" :: "Message 5" :: Nil
 
-Source(simpleMessages)
-.map(println(_))
-.to(Sink.ignore)
-.run()
-}
+   Source(simpleMessages)
+      .map(println(_))
+      .to(Sink.ignore)
+      .run()
+   }
 }
 ```   
    
