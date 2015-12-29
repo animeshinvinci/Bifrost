@@ -109,7 +109,7 @@ Every stream has two essential components, without which it will not run:
 ![](http://i.imgur.com/PF84anG.png)
 
 - A ```Source``` is something that has exactly one output.  It can produce a sequence of many items but they all follow one another, flowing from the Source.  We can use many things as a Source.  In our example above we use a simple List of strings.
-- A ```Sink``` is something that has exactly one input and it is the final step in any stream.  In the example above we actually create a dummy Sink with the ```Sink.ignore``` call.  This ensures that the stream can run be we do not need to define the destination any further.
+- A ```Sink``` is something that has exactly one input and it is the final step in any stream.  In the example above we actually create a dummy Sink with the ```Sink.ignore``` call.  This ensures that the stream can run but we do not need to define the destination any further.
 
 In the above example we use the ```.map(println(_))``` call to process each message that is emitted from the Sink and print it to the console.
 
@@ -121,11 +121,12 @@ This call to ```.run()``` is the reason that we must pass in the ```implicit mat
 The Basics - Running our Simple Stream
 ===
 
-To fire this stream up and make it do something, we create a simple application and make a call to our *SimpleStreams.printSimpleMessagesToConsole* method.
+To fire this stream up and make it do something, we create a simple application and make a call to our ```SimpleStreams.printSimpleMessagesToConsole``` method.
 
 *Start.scala*
 
 ```scala
+package com.datinko.asgard.bifrost
 import akka.stream.{ActorMaterializer}
 
 import com.datinko.asgard.bifrost.tutorial.SimpleStreams
@@ -135,6 +136,7 @@ import com.datinko.asgard.bifrost.tutorial.SimpleStreams
   */
 object Start extends App {
 
+  implicit val system = ActorSystem("Bifrost")
   implicit val materializer = ActorMaterializer()
 
   SimpleStreams.printSimpleMessagesToConsole(materializer)
@@ -142,6 +144,22 @@ object Start extends App {
 }
 ```
 
+There are two supporting elements that we need in our application to get our stream working:
+
+- An ```ActorSystem``` is an Akka actor system.  As Akka Streams are, somewhat obviously, based on akka, we need to have an actor system up and running for the streams to work.  We have done the simplest possible to create an instance of an akka system with a name of our choosing.  Making this ```implicit``` means that it can be picked up an used in other code whenever it is needed.
+- The ```Materializer``` as discussed above provides the processing power to turn a stream definition into something that can actually be executed with a series of akka actors.  Again, we have made this ```implicit``` so that it can be picked up and used in other code whenever it is needed.  The main user of this materializer is our ```SimpleStreams``` object.
+
+When you execute this application, either from within your IDE or from the command line using ```sbt run``` you should see output like:
+
+```
+Message 1
+Message 2
+Message 3
+Message 4
+Message 5
+```
+
+Fairly uninspiring stuff but we now have a working system with all the plumbing we need to get streams up and running.  Now we can move on and make some more useful and better designed streams.
 
 
  
