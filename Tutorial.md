@@ -206,14 +206,8 @@ Enough theory, lets take a look at the code.
 ```scala
 package com.datinko.asgard.bifrost
 
-import java.util.Calendar
-
 import akka.stream.{SourceShape, ActorMaterializer}
 import akka.stream.scaladsl.{Flow, Zip, GraphDSL, Source}
-import akka.util.ByteString
-import com.typesafe.scalalogging.LazyLogging
-import io.scalac.amqp.Message
-import kamon.Kamon
 
 import scala.concurrent.duration.FiniteDuration
 
