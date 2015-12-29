@@ -161,11 +161,99 @@ Message 5
 
 Fairly uninspiring stuff but we now have a working system with all the plumbing we need to get streams up and running.  Now we can move on and make some more useful and better designed streams.
 
+Stream Graphs - Overview
+===
 
- 
- 
+In our simple early example of a stream, we did everything in one function.  This is rarely how we would do things in a production environment.  Often we would want to split up the parts of our stream into components that we can reuse.  Once we have these components we will probably want to wire those components together in a range of ways to get the stream we want.  Stream Graphs give us a way to do this.
+
+Splitting up our Sources, Flows and Sinks
+===
+
+Although we said that streams has two *essential* components for them to work, we failed to mention that there is one other type of component that makes it easier to decompose our streams into reusable chunks of functionality.
+
+![](http://i.imgur.com/nkvRPX3.png)
+
+- A ```Flow``` is something that has exactly one input and exactly one output.  A flow is often used to modify the messages that pass through the stream.  A stream can contain many flows and there are a range of common operations that can be used within a flow.  You can also implement your own operations within a flow.
+
+Creating a Reusable Source
+===
+
+One of the main objectives we would like to achieve in this tutorial is to create a number of streams that we can use to experiment with *backpressure* and monitor to observe its effects.  To do that we will need a ```Source``` object that we can reuse in many different scenarios with a range of different message production rates.  
 
 
+Say Hello to the ThrottledProducer
+===
 
+The first step to building such a system is to create a ```Source``` that produces the data we want at the rate we want.  We then want to be able to wire that source into a range of other components that will consume the messages that are produced.  We will call this source the ```ThrottledProducer```.  Bear with, there may be a lot of typing before we see results.
 
+The ThrottledProducer - Overview
+===
+In order to get a ```Source``` produce message at a rate that we can control, we need to create a Stream Graph and wrap it up as a ```Source``` that can be reused in another Stream Graph.  The ```ThrottledProducer``` has the following components within it.
 
+![](http://i.imgur.com/tUey1NP.png)
+
+- The ```Ticker``` is a built is akka-stream component that produces simple messages at a defined rate.  This is almost perfect for our needs, except that we want to control the content of the messages that our Source produces.
+- The ```NumberGenerator``` is simple a Scala ```Range``` that contains the number of messages we want.  In our case, the content of each message is an actual number.  Message 1 contains the number 1, message 2 contains the number 2 and so on.
+- The ```Zip``` operation is a build in akka-stream component and key to controlling the rate at which we produce messages inside our source.  The ```Zip``` operation waits until it has a value at both inputs before it produces an output.  The output takes the form of a tuple containing both inputs.  In our example our ```NumberGenerator``` produces all the messages we want to output almost immediately.  The Ticker produces ```Tick``` messages at the controlled rate we specify.  The messages from the ```NumberGenerator``` wait at the input of the ```Zip``` until a ```Tick``` arrives at its other input.  When this happens the ```Zip``` outputs a Tuple of form ```[Tick, Int]``` and sends it on to its output.
+- The ```ExtractFlow``` is a simple flow operation that extracts the ```Int``` element of the ```Zip``` output and passes it on.  It discards the ```Tick``` as it is not needed.  We only needed the ```Tick``` to control the rate at which messages were produced.
+
+The ThrottledProducer - Code
+===
+Enough theory, lets take a look at the code.
+
+*ThrottledProducer.scala*
+
+```scala
+package com.datinko.asgard.bifrost
+
+import java.util.Calendar
+
+import akka.stream.{SourceShape, ActorMaterializer}
+import akka.stream.scaladsl.{Flow, Zip, GraphDSL, Source}
+import akka.util.ByteString
+import com.typesafe.scalalogging.LazyLogging
+import io.scalac.amqp.Message
+import kamon.Kamon
+
+import scala.concurrent.duration.FiniteDuration
+
+/**
+ * An Akka Streams Source helper that produces messages at a defined rate.
+ */
+object ThrottledProducer {
+
+  def produceThrottled(implicit materializer: ActorMaterializer, initialDelay: FiniteDuration, interval: FiniteDuration, numberOfMessages: Int, name: String) = {
+
+    val ticker = Source.tick(initialDelay, interval, Tick)
+    val numbers = 1 to numberOfMessages
+    val rangeMessageSource = Source(numbers)
+
+    //define a stream to bring it all together..
+    val throttledStream = Source.fromGraph(GraphDSL.create() { implicit builder =>
+
+      //import this so we can use the ~> syntax
+      import GraphDSL.Implicits._
+
+      //define a zip operation that expects a tuple with a Tick and an Int in it..
+      //(Note that the operations must be added to the builder before they can be used)
+      val zip = builder.add(Zip[Tick.type, Int])
+
+      //create a flow to extract the second element in the tuple (our message - we dont need the tick part after this stage)
+      val messageExtractorFlow = builder.add(Flow[(Tick.type, Int)].map(_._2))
+
+      //define the inputs for the zip function - it wont fire until something arrives at both inputs, so we are essentially
+      //throttling the output of this steam
+      ticker ~> zip.in0
+      rangeMessageSource ~> zip.in1
+
+      //send the output of our zip operation to a processing messageExtractorFlow that just allows us to take the second element of each Tuple, in our case
+      //this is the Int, we dont care about the Tick, it was just for timing and we can throw it away.
+      //route that to the 'out' Sink so that the next graph component we wire the source into can get to it
+      zip.out ~> messageExtractorFlow
+
+      SourceShape(messageExtractorFlow.out)
+    })
+    throttledStream
+  }
+}
+```
