@@ -446,7 +446,7 @@ The DelayingActor - Code
 The code for the ```DelayingActor``` is as follows:
 
 *DelayingActor.scala*
-```
+```scala
 package com.datinko.asgard.bifrost.actors
 
 import akka.stream.actor.ActorSubscriberMessage.{OnComplete, OnNext}
