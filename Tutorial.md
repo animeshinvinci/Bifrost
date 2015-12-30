@@ -212,6 +212,12 @@ import akka.stream.scaladsl.{Flow, Zip, GraphDSL, Source}
 import scala.concurrent.duration.FiniteDuration
 
 /**
+ * A really, really simple case class to represent a Tick of our ticker source.
+ * (This could be anything really, nothing special here)
+ */
+case class Tick()
+
+/**
  * An Akka Streams Source helper that produces messages at a defined rate.
  */
 object ThrottledProducer {
@@ -225,15 +231,15 @@ object ThrottledProducer {
     //define a stream to bring it all together..
     val throttledStream = Source.fromGraph(GraphDSL.create() { implicit builder =>
 
-      //import this so we can use the ~> syntax
-      import GraphDSL.Implicits._
-
       //define a zip operation that expects a tuple with a Tick and an Int in it..
       //(Note that the operations must be added to the builder before they can be used)
       val zip = builder.add(Zip[Tick.type, Int])
 
       //create a flow to extract the second element in the tuple (our message - we dont need the tick part after this stage)
       val messageExtractorFlow = builder.add(Flow[(Tick.type, Int)].map(_._2))
+
+	  //import this so we can use the ~> syntax
+      import GraphDSL.Implicits._
 
       //define the inputs for the zip function - it wont fire until something arrives at both inputs, so we are essentially
       //throttling the output of this steam
@@ -251,3 +257,55 @@ object ThrottledProducer {
   }
 }
 ```
+
+The whole purpose of this function is to create a ```Source``` stream that we have called ```throttledStream``` that can included as part of another Stream Graph.
+
+We start by defining our two Source objects, the ```ticker``` and the collection of number messages.  The ```Source``` object has handy constructors that allow us to pass in many different types of collections that are automatically turned into valid sources.  We'll use these two sources a little later to feed into our ```Zip``` operation.
+
+The definition of the Stream Graph is started with:
+
+```val throttledStream = Source.fromGraph(.......)```
+
+We signal our intention to create a Graph from scratch using:
+
+```GraphDSL.create() { implicit builder =>.......}```
+
+All GraphDSL operations need reference to a ```builder``` object which acts as a context for the Stream Graph.  Sources, sinks, flows and opearations are registered with the builder.  Once that is done they can be wired together into a stream definition. 
+
+The next steps are to create the operations we want within our graph.  First we build define the ```Zip``` operation that expects to receive inputs of type ```Tick``` and ```Int``` and therefore produce a Tuple with the same type of elements.
+
+```val zip = builder.add(Zip[Tick.type, Int])```
+
+The next operation to add to the builder is the message extractor flow which ensures that we only take the second element in each tuple and discard the ```Tick``` element that we no longer need.  (The map ```Flow``` defines the type of objects it expects to receive while the ```map``` operation simply tells the flow to extract and pass on the second element of each message it receives).
+
+```val messageExtractorFlow = builder.add(Flow[(Tick.type, Int)].map(_._2))```
+
+ThrottledProducer - Code - Building the Graph
+===
+Once we have defined all the sources, flows and operations that will be used in the graph, we need to wire those elements together to actually form the graph.
+
+To make this easier the GraphDSL provides a number of implicits we can use.  To access these we import them using:
+
+```import GraphDSL.Implicits._```
+
+The most obvious benefit of this is that it allows us to use the ```~>``` operator to wire components together in the graph, like so:
+
+```scala
+ticker ~> zip.in0
+
+rangeMessageSource ~> zip.in1
+
+zip.out ~> messageExtractorFlow
+```
+
+(Note that this illustrates that the ```Zip``` has a number inputs and a single output).
+
+The final element inside the Graph definition is to indicate what kind of Graph component we are creating (Source, Sink or Flow).  
+
+```SourceShape(messageExtractorFlow.out)```
+
+The ```SourceShape``` call indicates that this is a source component and we must tell the Graph which of its internal operations supplies the messages that will be exposed to consumers of this source.
+
+(Note that there are ```SinkShape``` and ```FlowShape``` elements to support making Sinks and Flows).
+
+Once we have build the graph for the ```throttledSource``` we return a reference to the function so that it can be used when building another Graph. 
