@@ -359,9 +359,136 @@ Message 5
 Message 999
 ```
 
+Still not the most impressive of demos but now we have a very neat and reuseable way of defining the major parts of any stream graph.  
+ Next we'll move on to building some Sinks that can help us experiment with reactive streams.
+  
 
-TODO: Introduce Actors - a better way of encapsulating functionality!  Anonymous functions are good for small things.. for something more, we can use actors!  DelayingActor, SlowingActor.
+Creating a Reusable Sink
+===
+Now that we have a nice reusable, configurable ```Source``` object we could do with having a similarly reusable and configurable
+  ```Sink``` object that helps us experiment with reactive streams.  While we are doing that we'll wire in some simple logging
+  just so we can we whats happening within our system.
 
-TODO: Introduce logging - a simple way of seeing what it going on.
+Adding Dependencies for Logging
+===
+As mentioned earlier, we would like to be able to make use of logging within our system to be able to see what is really happening.  This will
+be some pretty simple logging that we will expand upon in the future, but it will do us for now.  To be able to use logging, we need to add
+a couple of dependencies and a configuration file to our application.
+
+Add the following dependencies to your build.sbt file.
+
+*build.sbt*
+```scala
+/* dependencies */
+libraryDependencies ++= Seq (
+
+  ...
+  
+  // -- Logging --
+  ,"ch.qos.logback" % "logback-classic" % "1.1.2"
+  ,"com.typesafe.scala-logging" %% "scala-logging" % "3.1.0"
+
+  ...
+
+)
+```
+
+Because we are using ```Logback``` as our logging provider, we also need to add some configuration settings to our
+application to tell logback where to output its logs and what format to write log entries in.
+
+Add a file to ```/scr/main/resources/logback.xml``` with the following contents:
+
+*logback.xml*
+```xml
+<configuration>
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="FILE" class="ch.qos.logback.core.FileAppender">
+        <!-- path to your log file, where you want to store logs -->
+        <file>/Users/yourusername/test.log</file>
+        <append>false</append>
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <root level="debug">
+        <appender-ref ref="STDOUT" />
+        <appender-ref ref="FILE" />
+    </root>
+</configuration>
+```
+
+We wont dwell on this configuration file, its a pretty standard logback configuration file that does everything we need it to do for now.
+
+
+Say Hello to the DelayingActor
+===
+So far in this tutorial we have made very simple ```Sink``` objects that dont do very much apart from discard the messages
+they receieve.  Akka actors are a really good way of making a chunk of configurable processing logic that can be reused 
+in a range of stream graphs.  
+
+DelayingActor - Overview
+===
+To make a standard Akka Actor able to work within a reactive stream and be able to understand *backpressure* we need to 
+a few minor modifications to a standard actor.  The idea of this ```DelayingActor``` is to add a fake processing
+delay to each message it receives.  We'll also take the opportunity to introduce some logging output so that we can
+log the processing of each message and see what is happening inside our running system.
+
+http://doc.akka.io/api/akka-stream-and-http-experimental/2.0/index.html#akka.stream.actor.ActorSubscriber
+
+The DelayingActor - Code
+===
+The code for the ```DelayingActor``` is as follows:
+
+*DelayingActor.scala*
+```
+package com.datinko.asgard.bifrost.actors
+
+import akka.stream.actor.ActorSubscriberMessage.{OnComplete, OnNext}
+import akka.stream.actor.{OneByOneRequestStrategy, RequestStrategy, ActorSubscriber}
+import com.typesafe.scalalogging.LazyLogging
+import _root_.io.scalac.amqp.{Message}
+
+
+/**
+ * An actor that introduces a fixed delay when processing each message.
+ */
+//Actor Subscriber trait extension is need so that this actor can be used as part of a stream
+class DelayingActor(name: String, delay: Long) extends ActorSubscriber with LazyLogging {
+  override protected def requestStrategy: RequestStrategy = OneByOneRequestStrategy
+
+  val actorName = name
+
+  val consumeCounter = Kamon.metrics.counter("delayingactor-consumed-counter")
+
+  def this(name: String) {
+    this(name, 0)
+  }
+
+  override def receive: Receive = {
+    case OnNext(msg: Message) =>
+      Thread.sleep(delay)
+      logger.debug(s"Message in delaying actor sink ${self.path} '$actorName': $msg")
+      consumeCounter.increment(1)
+  case OnComplete =>
+      logger.debug(s"Completed Messgae received in ${self.path} '$actorName'")      
+    case _ =>
+      logger.debug(s"Unknown message in  ${self.path} '$actorName'")
+  }
+}
+```
+
+Its worth discussing the minor changes we have had to make to ensure this actor can be used inside a reactive stream.
+
+
+
+
+
+
 
 TODO: Kamon/StatsD/Graphite/Grafana - the daddy
