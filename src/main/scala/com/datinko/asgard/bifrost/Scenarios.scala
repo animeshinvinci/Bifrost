@@ -7,7 +7,6 @@ import com.datinko.asgard.bifrost.actors.{SlowDownActor, DelayingActor}
 import io.scalac.amqp.Message
 import scala.concurrent.duration._
 
-
 /**
  * A set of test scenarios to demonstrate Akka Stream back pressure in action.  Metrics are exported
  * to StatsD by Kamon so they can be graphed in Grafana.

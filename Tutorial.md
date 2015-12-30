@@ -194,8 +194,8 @@ In order to get a ```Source``` produce message at a rate that we can control, we
 
 - The ```Ticker``` is a built is akka-stream component that produces simple messages at a defined rate.  This is almost perfect for our needs, except that we want to control the content of the messages that our Source produces.
 - The ```NumberGenerator``` is simple a Scala ```Range``` that contains the number of messages we want.  In our case, the content of each message is an actual number.  Message 1 contains the number 1, message 2 contains the number 2 and so on.
-- The ```Zip``` operation is a build in akka-stream component and key to controlling the rate at which we produce messages inside our source.  The ```Zip``` operation waits until it has a value at both inputs before it produces an output.  The output takes the form of a tuple containing both inputs.  In our example our ```NumberGenerator``` produces all the messages we want to output almost immediately.  The Ticker produces ```Tick``` messages at the controlled rate we specify.  The messages from the ```NumberGenerator``` wait at the input of the ```Zip``` until a ```Tick``` arrives at its other input.  When this happens the ```Zip``` outputs a Tuple of form ```[Tick, Int]``` and sends it on to its output.
-- The ```ExtractFlow``` is a simple flow operation that extracts the ```Int``` element of the ```Zip``` output and passes it on.  It discards the ```Tick``` as it is not needed.  We only needed the ```Tick``` to control the rate at which messages were produced.
+- The ```Zip``` operation is a build in akka-stream component and key to controlling the rate at which we produce messages inside our source.  The ```Zip``` operation waits until it has a value at both inputs before it produces an output.  The output takes the form of a tuple containing both inputs.  In our example our ```NumberGenerator``` produces all the messages we want to output almost immediately.  The Ticker produces ```Tick``` messages at the controlled rate we specify.  The messages from the ```NumberGenerator``` wait at the input of the ```Zip``` until a ```Tick``` arrives at its other input.  When this happens the ```Zip``` outputs a Tuple of form ```[Tick, String]``` and sends it on to its output.
+- The ```ExtractFlow``` is a simple flow operation that extracts the ```String``` element of the ```Zip``` output and passes it on.  It discards the ```Tick``` as it is not needed.  We only needed the ```Tick``` to control the rate at which messages were produced.
 
 The ThrottledProducer - Code
 ===
@@ -206,39 +206,34 @@ Enough theory, lets take a look at the code.
 ```scala
 package com.datinko.asgard.bifrost
 
-import akka.stream.{SourceShape, ActorMaterializer}
+import akka.stream.{SourceShape}
 import akka.stream.scaladsl.{Flow, Zip, GraphDSL, Source}
+import com.datinko.asgard.bifrost.Tick
 
 import scala.concurrent.duration.FiniteDuration
 
 /**
- * A really, really simple case class to represent a Tick of our ticker source.
- * (This could be anything really, nothing special here)
- */
-case class Tick()
-
-/**
- * An Akka Streams Source helper that produces messages at a defined rate.
+ * An Akka Streams Source helper that produces  messages at a defined rate.
  */
 object ThrottledProducer {
 
-  def produceThrottled(implicit materializer: ActorMaterializer, initialDelay: FiniteDuration, interval: FiniteDuration, numberOfMessages: Int, name: String) = {
+  def produceThrottled(initialDelay: FiniteDuration, interval: FiniteDuration, numberOfMessages: Int, name: String) = {
 
     val ticker = Source.tick(initialDelay, interval, Tick)
     val numbers = 1 to numberOfMessages
-    val rangeMessageSource = Source(numbers)
+    val rangeMessageSource = Source(numbers.map(message => s"Message $message"))
 
     //define a stream to bring it all together..
     val throttledStream = Source.fromGraph(GraphDSL.create() { implicit builder =>
 
-      //define a zip operation that expects a tuple with a Tick and an Int in it..
+      //define a zip operation that expects a tuple with a Tick and a Message in it..
       //(Note that the operations must be added to the builder before they can be used)
-      val zip = builder.add(Zip[Tick.type, Int])
+      val zip = builder.add(Zip[Tick.type, String])
 
       //create a flow to extract the second element in the tuple (our message - we dont need the tick part after this stage)
-      val messageExtractorFlow = builder.add(Flow[(Tick.type, Int)].map(_._2))
+      val messageExtractorFlow = builder.add(Flow[(Tick.type, String)].map(_._2))
 
-	  //import this so we can use the ~> syntax
+      //import this so we can use the ~> syntax
       import GraphDSL.Implicits._
 
       //define the inputs for the zip function - it wont fire until something arrives at both inputs, so we are essentially
@@ -247,8 +242,8 @@ object ThrottledProducer {
       rangeMessageSource ~> zip.in1
 
       //send the output of our zip operation to a processing messageExtractorFlow that just allows us to take the second element of each Tuple, in our case
-      //this is the Int, we dont care about the Tick, it was just for timing and we can throw it away.
-      //route that to the 'out' Sink so that the next graph component we wire the source into can get to it
+      //this is the string message, we dont care about the Tick, it was just for timing and we can throw it away.
+      //route that to the 'out' Sink.
       zip.out ~> messageExtractorFlow
 
       SourceShape(messageExtractorFlow.out)
@@ -272,13 +267,13 @@ We signal our intention to create a Graph from scratch using:
 
 All GraphDSL operations need reference to a ```builder``` object which acts as a context for the Stream Graph.  Sources, sinks, flows and opearations are registered with the builder.  Once that is done they can be wired together into a stream definition. 
 
-The next steps are to create the operations we want within our graph.  First we build define the ```Zip``` operation that expects to receive inputs of type ```Tick``` and ```Int``` and therefore produce a Tuple with the same type of elements.
+The next steps are to create the operations we want within our graph.  First we build define the ```Zip``` operation that expects to receive inputs of type ```Tick``` and ```String``` and therefore produce a Tuple with the same type of elements.
 
-```val zip = builder.add(Zip[Tick.type, Int])```
+```val zip = builder.add(Zip[Tick.type, String])```
 
 The next operation to add to the builder is the message extractor flow which ensures that we only take the second element in each tuple and discard the ```Tick``` element that we no longer need.  (The map ```Flow``` defines the type of objects it expects to receive while the ```map``` operation simply tells the flow to extract and pass on the second element of each message it receives).
 
-```val messageExtractorFlow = builder.add(Flow[(Tick.type, Int)].map(_._2))```
+```val messageExtractorFlow = builder.add(Flow[(Tick.type, String)].map(_._2))```
 
 ThrottledProducer - Code - Building the Graph
 ===
@@ -320,15 +315,15 @@ If we add a new function to the ```SimpleStreams``` object we created earlier we
 
 *SimpleStreams.scala*
 ```scala
-def throttledProducerToConsole(implicit materializer: ActorMaterializer) = {
+def throttledProducerToConsole() = {
 
-    val theGraph = RunnableGraph.fromGraph(GraphDSL.create() { implicit builder: GraphDSL.Builder[Unit] =>
+    val theGraph = RunnableGraph.fromGraph(GraphDSL.create() { implicit builder =>
+
+      val source = builder.add(ThrottledProducer.produceThrottled(1 second, 20 milliseconds, 20000, "fastProducer"))
+      val printFlow = builder.add(Flow[(String)].map{println(_)})
+      val sink = builder.add(Sink.ignore)
 
       import GraphDSL.Implicits._
-
-      val source = builder.add(ThrottledProducer.produceThrottled(materializer, 1 second, 20 milliseconds, 20000, "fastProducer"))
-      val printFlow = builder.add(Flow[(Message)].map{println(_)})
-      val sink = builder.add(Sink.ignore)
 
       source ~> printFlow ~> sink
 
@@ -352,7 +347,18 @@ To run this graph we simply add the following to our ```Start.scala``` object.
 SimpleStreams.throttledProducerToConsole.run()
 ```
 
-TODO: Example of output
+When you execute this application, either from within your IDE or from the command line using ```sbt run``` you should see output like:
+
+```
+Message 1
+Message 2
+Message 3
+Message 4
+Message 5
+...
+Message 999
+```
+
 
 TODO: Introduce Actors - a better way of encapsulating functionality!  Anonymous functions are good for small things.. for something more, we can use actors!  DelayingActor, SlowingActor.
 

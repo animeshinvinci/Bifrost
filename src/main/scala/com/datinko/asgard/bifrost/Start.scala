@@ -38,7 +38,6 @@ object Start extends App {
   //Scenarios.fastPublisherSlowingSubscriber(materializer).run()
   //Scenarios.fastPublisherSlowingSubscriberWithDropBuffer(materializer).run()
   //Scenarios.fastPublisherSlowingSubscriberWithBackPressure(materializer).run()
-
-  SimpleStreams.printSimpleMessagesToConsole(materializer)
+  SimpleStreams.throttledProducerToConsole.run()
 
 }

@@ -1,11 +1,7 @@
 package com.datinko.asgard.bifrost.tutorial
 
-import akka.actor.Props
 import akka.stream.{ClosedShape, ActorMaterializer}
 import akka.stream.scaladsl._
-import com.datinko.asgard.bifrost.ThrottledProducer
-import com.datinko.asgard.bifrost.actors.DelayingActor
-import io.scalac.amqp.Message
 import scala.concurrent.duration._
 
 /**
@@ -23,16 +19,15 @@ object SimpleStreams {
       .run()
   }
 
-  def throttledProducerToConsole(implicit materializer: ActorMaterializer) = {
+  def throttledProducerToConsole() = {
 
-    val theGraph = RunnableGraph.fromGraph(GraphDSL.create() { implicit builder: GraphDSL.Builder[Unit] =>
+    val theGraph = RunnableGraph.fromGraph(GraphDSL.create() { implicit builder =>
+
+      val source = builder.add(ThrottledProducer.produceThrottled(1 second, 20 milliseconds, 20000, "fastProducer"))
+      val printFlow = builder.add(Flow[(String)].map{println(_)})
+      val sink = builder.add(Sink.ignore)
 
       import GraphDSL.Implicits._
-
-      val source = builder.add(ThrottledProducer.produceThrottled(materializer, 1 second, 20 milliseconds, 20000, "fastProducer"))
-      val printFlow = builder.add(Flow[(Message)].map{println(_)})
-
-      val sink = builder.add(Sink.ignore)
 
       source ~> printFlow ~> sink
 
