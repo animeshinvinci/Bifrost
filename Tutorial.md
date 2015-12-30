@@ -310,4 +310,47 @@ The ```SourceShape``` call indicates that this is a source component and we must
 
 (Note that there are ```SinkShape``` and ```FlowShape``` elements to support making Sinks and Flows).
 
-Once we have build the graph for the ```throttledSource``` we return a reference to the function so that it can be used when building another Graph. 
+Once we have build the graph for the ```throttledSource``` we return a reference to the function so that it can be used when building another Graph.
+
+Using the ThrottledProducer in a Graph
+===
+Now that we have built our ```ThrottledProducer``` we want to use it for something.  Believe it or not, the cleanest way of showing the ```ThrottledProducer``` in action is to use it in another simple Graph and then run that graph.
+
+If we add a new function to the ```SimpleStreams``` object we created earlier we get the following.  This uses a lot of the concepts we've just covered in the ```ThrottledProducer``` to build a stream graph, expect that this builds a runnable (also known as a 'closed') graph that is complete with a ```Source``` and a ```Sink```.
+
+*SimpleStreams.scala*
+```scala
+def throttledProducerToConsole(implicit materializer: ActorMaterializer) = {
+
+    val theGraph = RunnableGraph.fromGraph(GraphDSL.create() { implicit builder: GraphDSL.Builder[Unit] =>
+
+      import GraphDSL.Implicits._
+
+      val source = builder.add(ThrottledProducer.produceThrottled(materializer, 1 second, 20 milliseconds, 20000, "fastProducer"))
+      val printFlow = builder.add(Flow[(Message)].map{println(_)})
+
+      val sink = builder.add(Sink.ignore)
+
+      source ~> printFlow ~> sink
+
+      ClosedShape
+    })
+    theGraph
+  }
+```
+
+The differences to note about this function is that it creates a ```RunnableGraph``` which indicates it should have a ```Source``` and a ```Sink```.  This is matched by the use of ```ClosedShape``` at the end of the function rather than than the ```SourceShape``` we used in the ```ThrottledProducer```.
+
+As we did previously, we define the components to be used in the graph.  In this case we have our ```ThrottledProducer``` that is set to produce a message every 20 milliseconds after an initial delay of 1 second and it will produce 20000 messages.
+
+To make it a little easier to see if anything is happening we have created a simple flow that prints every message it sees.
+
+This is all capped off by the ```Sink.ignore``` that we have seen earlier.  This simply gives the graph the sink it must have to be considered valid but this sink simply discards all messages it receives.
+
+To run this graph we simply add the following to our ```Start.scala``` object.
+
+```scala
+SimpleStreams.throttledProducerToConsole.run()
+```
+
+TODO: Example of output
