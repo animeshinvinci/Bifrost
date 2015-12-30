@@ -302,7 +302,9 @@ zip.out ~> messageExtractorFlow
 
 The final element inside the Graph definition is to indicate what kind of Graph component we are creating (Source, Sink or Flow).  
 
-```SourceShape(messageExtractorFlow.out)```
+```
+SourceShape(messageExtractorFlow.out)
+```
 
 The ```SourceShape``` call indicates that this is a source component and we must tell the Graph which of its internal operations supplies the messages that will be exposed to consumers of this source.
 
