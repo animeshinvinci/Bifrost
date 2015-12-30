@@ -328,7 +328,6 @@ def throttledProducerToConsole(implicit materializer: ActorMaterializer) = {
 
       val source = builder.add(ThrottledProducer.produceThrottled(materializer, 1 second, 20 milliseconds, 20000, "fastProducer"))
       val printFlow = builder.add(Flow[(Message)].map{println(_)})
-
       val sink = builder.add(Sink.ignore)
 
       source ~> printFlow ~> sink
@@ -354,3 +353,9 @@ SimpleStreams.throttledProducerToConsole.run()
 ```
 
 TODO: Example of output
+
+TODO: Introduce Actors - a better way of encapsulating functionality!  Anonymous functions are good for small things.. for something more, we can use actors!  DelayingActor, SlowingActor.
+
+TODO: Introduce logging - a simple way of seeing what it going on.
+
+TODO: Kamon/StatsD/Graphite/Grafana - the daddy
