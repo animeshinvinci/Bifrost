@@ -452,8 +452,6 @@ package com.datinko.asgard.bifrost.actors
 import akka.stream.actor.ActorSubscriberMessage.{OnComplete, OnNext}
 import akka.stream.actor.{OneByOneRequestStrategy, RequestStrategy, ActorSubscriber}
 import com.typesafe.scalalogging.LazyLogging
-import _root_.io.scalac.amqp.{Message}
-
 
 /**
  * An actor that introduces a fixed delay when processing each message.
@@ -464,27 +462,29 @@ class DelayingActor(name: String, delay: Long) extends ActorSubscriber with Lazy
 
   val actorName = name
 
-  val consumeCounter = Kamon.metrics.counter("delayingactor-consumed-counter")
-
   def this(name: String) {
     this(name, 0)
   }
 
   override def receive: Receive = {
-    case OnNext(msg: Message) =>
+    case OnNext(msg: String) =>
       Thread.sleep(delay)
       logger.debug(s"Message in delaying actor sink ${self.path} '$actorName': $msg")
-      consumeCounter.increment(1)
-  case OnComplete =>
+    case OnComplete =>
       logger.debug(s"Completed Messgae received in ${self.path} '$actorName'")      
-    case _ =>
-      logger.debug(s"Unknown message in  ${self.path} '$actorName'")
+    case msg =>
+      logger.debug(s"Unknown message $msg in $actorName: ")
   }
 }
 ```
 
 Its worth discussing the minor changes we have had to make to ensure this actor can be used inside a reactive stream.
 
+- The ```LazyLogging``` trait gives us access to the logback ```logger``` inside our actor.  The lazy logging trait only creates the logger when it is first called.  This saves us some resources by ensuring we dont spin up a logger unless we use one, but the downside is slightly worse performance.  Note that this is not needed for reactive streams, its just for us to be able to see what is going on inside the actor in a very simple way.
+- To make the actor part of the reactive stream we need to extend ```ActorSubscriber```.  This gives us full control of stream backpressure and means that the actor will recieve ```ActorSubscriberMessage.OnNext```, ```ActorSubscriberMessage.OnComplete``` and```ActorSubscriberMessage.OnError``` messages as well as any other non-stream messages just like any other actor.  The one we are most interested in is the ```OnNext``` message which is used to pass the next stream message to this actor.
+- When defining the actor as an ```ActorSubscriber``` we must also define a ```RequestStrategy``` so the actor is able to signal how it wants to control backpressure in the stream, or, in other words, what does the actor do when it wants more or less messages to be sent to it. We have chosen the ```OneByOneRequestStrategy``` so that everytime the actor has 0 messages to process it asks for one more.
+
+For more information on the ```ActorSubscriber``` check out the [http://doc.akka.io/api/akka-stream-and-http-experimental/2.0/index.html#akka.stream.actor.ActorSubscriber](http://doc.akka.io/api/akka-stream-and-http-experimental/2.0/index.html#akka.stream.actor.ActorSubscriber "documentation")
 
 
 
