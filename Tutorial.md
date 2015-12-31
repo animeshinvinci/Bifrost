@@ -1094,4 +1094,4 @@ and take a look at Grafana (having updated our Sink metric to be 'slowdownactor-
 ![](http://i.imgur.com/yWobrkt.png)
 
 This chart shows that as the Sink processes messages an an increasingly slow rate, the producer slows its production rate.  These is because of the backpressure in the stream coming from the Sink to the Source.  As it struggles to consume messages the Sink signals that it needs more messages less often, this causes the Source to slow down.  The message production rate is actually controlled by the SlowDownActor (the Sink).
-
+.
