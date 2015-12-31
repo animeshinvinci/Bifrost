@@ -525,7 +525,7 @@ The ```Sink.actorSubscriber(...)``` provides an easy way for us to use an ```Act
 
 To execute this from our ```Start.scala``` object (with its implicit actor system and implicit materializers) we use:
 
-```Scenarios.fastPublisherFastSubscriber().run()```
+Scenarios.fastPublisherFastSubscriber().run()
    
 The output will be something similar to:
 
@@ -633,7 +633,7 @@ Once we have all the dependencies and SBT plugins configured we need to add some
 Add the following content to ```/src/main/resources/application.conf```
 
 *application.conf*
-```json
+```
 akka {
   loglevel = INFO
 
