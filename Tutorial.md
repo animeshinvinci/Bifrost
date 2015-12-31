@@ -58,10 +58,6 @@ val akkaStream      = "2.0"
     
 libraryDependencies ++= Seq (
  
-    // -- Logging --
-    ,"ch.qos.logback" % "logback-classic" % "1.1.2"
-    ,"com.typesafe.scala-logging" %% "scala-logging" % "3.1.0"
-   
     // -- Akka --
     ,"com.typesafe.akka" %% "akka-testkit" % akka % "test"
     ,"com.typesafe.akka" %% "akka-actor" % akka
@@ -550,6 +546,216 @@ are publishing and receiving messages as expected, however, it would be nice to 
 flow in a more visual way.
 
 
+Kamon - Visualising what's happening
+===
+
+In their own words, 
+
+> "Kamon is a reactive-friendly toolkit for monitoring applications that run on top of the Java 
+> Virtual Machine. We are specially enthusiastic to applications built with the Typesafe Reactive Platform (using Scala, 
+> Akka, Spray and/or Play!) but as long as you are on the JVM, Kamon can help get the monitoring information you need 
+> from your application."
+
+this sounds like a great way of monitoring our application and being able to see what is 
+really happening when we run our stream graphs, but to be able visualise the information that Kamon exposes we'll need to add a few more components to the mix.
+
+Kamon is able to gather metrics about performance and health of our application and export this information regularly to a backend that is able to store and aggregate this information.  Other tools are then able to render automatically updating charts based on this information.  A very common collection of components to do this work are Kamon, Graphite, ElasticSearch and Grafana.
+
+![](http://i.imgur.com/i6jbqP4.png)
+
+- **Kamon** is a library that uses AspectJ to hook into the method calls made by your ActorSystem and record events of different types.  There are a range of actor system metrics that are gathered automatically.  You can also add your own metrics to be recorded as the application runs.  The default configuration works pretty well but it takes a little digging to get everything up and running, mostly becuase the library is evolving quickly.
+- **StatsD** - **Graphite** is a network daemon that runs on the Node.js platform and listens for information like counters and timers sent over UDP.  StatsD then sends its information to be aggregated by a range of pluggable backend services.  In our case, we will use Graphite.
+- **Grafana** is a frontend dashboard that provides a very attractive and flexible way of presenting the information aggregated by Graphite.  All of this updates in realtime.
 
 
-TODO: Kamon/StatsD/Graphite/Grafana - the daddy
+Because getting all these components up and running can be challenging, we are going to use a pre-configured Docker container where all the hard work has already been done.  This builds on the [http://kamon.io/teamblog/2014/04/27/get-started-quicker-with-our-docker-image/](http://kamon.io/teamblog/2014/04/27/get-started-quicker-with-our-docker-image/ "Kamon Docker Image") that the Kamon team have already created.  An even simpler implementation that we will use is based on a tutorial by Nepomuk Seiler which you can see [http://mukis.de/pages/monitoring-akka-with-kamon/](http://mukis.de/pages/monitoring-akka-with-kamon/ "here") is you want more details.
+
+
+Adding Dependencies for Kamon
+===
+To be able to use kamon, we need to add a couple of dependencies, some AspectJ configuration and a SBT plugin and a configuration file to our application.
+
+Add the following dependencies and AspectJ configuration to your ```build.sbt``` file.
+
+
+*build.sbt*
+```scala
+
+scalaVersion := "2.11.7"
+
+... existing version numbers ...
+val kamonVersion    = "0.5.2"
+
+
+/* dependencies */
+libraryDependencies ++= Seq (
+
+  ... existing dependencies ...
+  
+  // -- kamon monitoring dependencies --
+  ,"io.kamon" % "kamon-core_2.11" % kamonVersion
+  ,"io.kamon" %% "kamon-core" % kamonVersion
+  ,"io.kamon" %% "kamon-scala" % kamonVersion
+  ,"io.kamon" %% "kamon-akka" % kamonVersion
+  ,"io.kamon" %% "kamon-statsd" % kamonVersion
+  ,"io.kamon" %% "kamon-log-reporter" % kamonVersion
+  ,"io.kamon" %% "kamon-system-metrics" % kamonVersion
+  ,"org.aspectj" % "aspectjweaver" % "1.8.5"
+
+  ... existing dependencies ...
+
+)
+
+//configure aspectJ plugin to enable Kamon monitoring
+aspectjSettings
+javaOptions <++= AspectjKeys.weaverOptions in Aspectj
+fork in run := true
+```
+
+Kamon depends on AspectJ to inject its monitoring code in all the right places in our akka actor system.  To make sure this can happen we need to add a build plug-in to our ```plugins.sbt``` file.
+
+Ensure that your ```/project/plugins.sbt``` looks like this:
+
+```scala
+logLevel := Level.Warn
+
+// The Typesafe repository
+resolvers += Resolver.typesafeRepo("releases")
+
+addSbtPlugin("com.typesafe.sbt" % "sbt-aspectj" % "0.9.4")
+```
+
+
+Configuring Kamon
+===
+Once we have all the dependencies and SBT plugins configured we need to add some more configuration to our application to tell Kamon what to monitor and where to send its data.
+
+Add the following content to ```/src/main/resources/application.conf```
+
+*application.conf*
+```json
+akka {
+  loglevel = INFO
+
+  extensions = ["kamon.akka.Akka", "kamon.statsd.StatsD"]
+}
+
+
+# Kamon Metrics
+# ~~~~~~~~~~~~~~
+
+kamon {
+
+  metric {
+
+    # Time interval for collecting all metrics and send the snapshots to all subscribed actors.
+    tick-interval = 1 seconds
+
+    # Disables a big error message that will be typically logged if your application wasn't started
+    # with the -javaagent:/path-to-aspectj-weaver.jar option. If you are only using KamonStandalone
+    # it might be ok for you to turn this error off.
+    disable-aspectj-weaver-missing-error = false
+
+    # Specify if entities that do not match any include/exclude filter should be tracked.
+    track-unmatched-entities = yes
+
+    filters {
+      akka-actor {
+        includes = ["*/user/*"]
+        excludes = [ "*/system/**", "*/user/IO-**", "*kamon*" ]
+      }
+
+      akka-router {
+        includes = ["*/user/*"]
+        excludes = []
+      }
+
+      akka-dispatcher {
+        includes = ["*/user/*"]
+        excludes = []
+      }
+
+      trace {
+        includes = [ "**" ]
+        excludes = [ ]
+      }
+    }
+  }
+
+  # Controls whether the AspectJ Weaver missing warning should be displayed if any Kamon module requiring AspectJ is
+  # found in the classpath but the application is started without the AspectJ Weaver.
+  show-aspectj-missing-warning = yes
+
+  statsd {
+
+    # Hostname and port in which your StatsD is running. Remember that StatsD packets are sent using UDP and
+    # setting unreachable hosts and/or not open ports wont be warned by the Kamon, your data wont go anywhere.
+    hostname = "192.168.99.100"
+    port = 8125
+
+    # Interval between metrics data flushes to StatsD. It's value must be equal or greater than the
+    # kamon.metric.tick-interval setting.
+    flush-interval = 1 seconds
+
+    # Max packet size for UDP metrics data sent to StatsD.
+    max-packet-size = 1024 bytes
+
+    # Subscription patterns used to select which metrics will be pushed to StatsD. Note that first, metrics
+    # collection for your desired entities must be activated under the kamon.metrics.filters settings.
+    subscriptions {
+      histogram       = [ "**" ]
+      min-max-counter = [ "**" ]
+      gauge           = [ "**" ]
+      counter         = [ "**" ]
+      trace           = [ "**" ]
+      trace-segment   = [ "**" ]
+      akka-actor      = [ "**" ]
+      akka-dispatcher = [ "**" ]
+      akka-router     = [ "**" ]
+      system-metric   = [ "**" ]
+      http-server     = [ "**" ]
+    }
+
+    # FQCN of the implementation of `kamon.statsd.MetricKeyGenerator` to be instantiated and used for assigning
+    # metric names. The implementation must have a single parameter constructor accepting a `com.typesafe.config.Config`.
+    metric-key-generator = kamon.statsd.SimpleMetricKeyGenerator
+
+    simple-metric-key-generator {
+
+      # Application prefix for all metrics pushed to StatsD. The default namespacing scheme for metrics follows
+      # this pattern:
+      #    application.host.entity.entity-name.metric-name
+      application = "Bifrost"
+
+      # Includes the name of the hostname in the generated metric. When set to false, the scheme for the metrics
+      # will look as follows:
+      #    application.entity.entity-name.metric-name
+      include-hostname = true
+
+      # Allow users to override the name of the hostname reported by kamon. When changed, the scheme for the metrics
+      # will have the following pattern:
+      #   application.hostname-override-value.entity.entity-name.metric-name
+      hostname-override = none
+
+      # When the sections that make up the metric names have special characters like dots (very common in dispatcher
+      # names) or forward slashes (all actor metrics) we need to sanitize those values before sending them to StatsD
+      # with one of the following strategies:
+      #   - normalize: changes ': ' to '-' and ' ', '/' and '.' to '_'.
+      #   - percent-encode: percent encode the section on the metric name. Please note that StatsD doesn't support
+      #     percent encoded metric names, this option is only useful if using our docker image which has a patched
+      #     version of StatsD or if you are running your own, customized version of StatsD that supports this.
+      metric-name-normalization-strategy = normalize
+    }
+  }
+
+  # modules can be disabled at startup using yes/no arguments.
+  modules {
+    kamon-log-reporter.auto-start = no
+    kamon-system-metrics.auto-start = no
+    #seems like you need to leave this set to 'no' or kamon double reports all statsd metrics..
+    kamon-statsd.auto-start = no
+    kamon-akka.auto-start = yes
+  }
+}
+```
+
