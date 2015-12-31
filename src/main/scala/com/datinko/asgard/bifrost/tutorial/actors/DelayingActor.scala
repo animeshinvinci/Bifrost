@@ -3,6 +3,7 @@ package com.datinko.asgard.bifrost.tutorial.actors
 import akka.stream.actor.ActorSubscriberMessage.{OnComplete, OnNext}
 import akka.stream.actor.{OneByOneRequestStrategy, RequestStrategy, ActorSubscriber}
 import com.typesafe.scalalogging.LazyLogging
+import kamon.Kamon
 
 /**
  * An actor that introduces a fixed delay when processing each message.
@@ -12,6 +13,7 @@ class DelayingActor(name: String, delay: Long) extends ActorSubscriber with Lazy
   override protected def requestStrategy: RequestStrategy = OneByOneRequestStrategy
 
   val actorName = name
+  val consumeCounter = Kamon.metrics.counter("delayingactor-consumed-counter")
 
   def this(name: String) {
     this(name, 0)
@@ -21,6 +23,7 @@ class DelayingActor(name: String, delay: Long) extends ActorSubscriber with Lazy
     case OnNext(msg: String) =>
       Thread.sleep(delay)
       logger.debug(s"Message in delaying actor sink ${self.path} '$actorName': $msg")
+      consumeCounter.increment(1)
     case OnComplete =>
       logger.debug(s"Completed Messgae received in ${self.path} '$actorName'")
     case msg =>

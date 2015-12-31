@@ -689,7 +689,7 @@ kamon {
   statsd {
 
     # Hostname and port in which your StatsD is running. Remember that StatsD packets are sent using UDP and
-    # setting unreachable hosts and/or not open ports wont be warned by the Kamon, your data wont go anywhere.
+    # setting unreachable hosts and/or not open ports wont be warned by the Kamon, your data wont go anywhere.  If you're running Docker on Linux this will probably be 127.0.0.1, if you're running Windows or OSX, like me, it will probably be 192.168.99.100
     hostname = "192.168.99.100"
     port = 8125
 
@@ -759,3 +759,170 @@ kamon {
 }
 ```
 
+This is a fairly standard setup that was lifted straight from the Kamon website.  The only points to note are the statsD hostname, which when you're running Docker on Linux is likely to be 127.0.0.1.  If you are running Docker Toolbox on Windows or Mac OSX then its likely to be 192.168.99.100.
+
+Getting the StatsD/Graphite/Grafana Docker Image Running
+===
+
+I'm assuming you have some understanding of Docker and its ability to provide lightweight fully configured images of servers and applications.  I wont delve into too much detail here.  To get our chosen Docker image running, start the Docker Quickstart Terminal (if you're on Windows or OSX - if you on Linux you can enter commands directly on the command line).  Once its running, enter the following command:
+
+```docker run -p 80:80 -p 8125:8125/udp -p 8126:8126 -p 8083:8083 -p 8086:8086 -p 8084:8084 --name kamon-grafana-dashboard muuki88/grafana_graphite:latest```
+
+This gets our image running and maps all the ports on the running image to the same ports on our local machine, so as far as local applications are concerned, StatsD, Graphite and Grafana are running locally.
+
+(If you have not run this image before, the image will be pulled from the Docker repository and this may take a little time).
+
+Once the image has been pulled you should be able to open your browser and navigate to:
+
+```http://192.168.99.100/```  (or http://127.0.0.1/ if you're running Linux).  
+
+If everything worked, you should see something similar to this:
+
+![](http://i.imgur.com/KJxWlec.png) 
+
+
+Updating our Application to Report to Kamon
+===
+Now we have our Docker container running, we need to make a few minor changes to get our stream graph application to report useful metrics.
+
+Although Kamon is able to expose some standard metrics such as 'Mailbox Size' and 'Time Spent in Mailbox' I wasn't able to interpret them usefully so I decided to do something a little more direct and implement my own metrics.
+
+## Updating the ThrottledProducer ##
+The first step is to update our ```ThrottledProducer``` so that it increments a counter every time it produces a message.  Lets take a look at the fully updated class and look at the details afterwards.
+
+*ThrottledProducer.scala*
+```scala
+import akka.stream.{SourceShape}
+import akka.stream.scaladsl.{Flow, Zip, GraphDSL, Source}
+import com.datinko.asgard.bifrost.Tick
+**import kamon.Kamon**
+
+import scala.concurrent.duration.FiniteDuration
+
+/**
+ * An Akka Streams Source helper that produces  messages at a defined rate.
+ */
+object ThrottledProducer {
+
+  def produceThrottled(initialDelay: FiniteDuration, interval: FiniteDuration, numberOfMessages: Int, name: String) = {
+
+    val ticker = Source.tick(initialDelay, interval, Tick)
+    val numbers = 1 to numberOfMessages
+    val rangeMessageSource = Source(numbers.map(message => s"Message $message"))
+
+    //define a stream to bring it all together..
+    val throttledStream = Source.fromGraph(GraphDSL.create() { implicit builder =>
+
+      **//1. create a Kamon counter so we can track number of messages produced
+      val createCounter = Kamon.metrics.counter("throttledProducer-create-counter")**
+
+      //define a zip operation that expects a tuple with a Tick and a Message in it..
+      //(Note that the operations must be added to the builder before they can be used)
+      val zip = builder.add(Zip[Tick.type, String])
+
+      //create a flow to extract the second element in the tuple (our message - we dont need the tick part after this stage)
+      val messageExtractorFlow = builder.add(Flow[(Tick.type, String)].map(_._2))
+
+      **//2. create a flow to log performance information to Kamon and pass on the message object unmolested
+      val statsDExporterFlow = builder.add(Flow[(String)].map{message => createCounter.increment(1); message})**
+
+
+      //import this so we can use the ~> syntax
+      import GraphDSL.Implicits._
+
+      //define the inputs for the zip function - it wont fire until something arrives at both inputs, so we are essentially
+      //throttling the output of this steam
+      ticker ~> zip.in0
+      rangeMessageSource ~> zip.in1
+
+      //send the output of our zip operation to a processing messageExtractorFlow that just allows us to take the second element of each Tuple, in our case
+      //this is the message, we dont care about the Tick, it was just for timing and we can throw it away.
+	  //3. Then we route the output of the extractor to a flow that exports data to StatsD
+      //then route that to the 'out' Sink as before.
+      **zip.out ~> messageExtractorFlow ~> statsDExporterFlow**
+
+      //4.  make sure we pass the right output to the SourceShape outlet
+      SourceShape(statsDExporterFlow.out)
+    })
+    throttledStream
+  }
+}
+```
+
+The changes we've made are highlighted in bold.  The first and most obvious change is to import the Kamon dependency.  The other changes in detail are:
+
+1. We create a named Kamon metrics counter.  This needs to have a unique name that helps us and Kamon identify it.  The counter 'recording instrument' as Kamon call it has two simple methods of ```increment``` and ```decrement```.  We'll only be using ```increment```.
+2. We create a graph flow that expects to receieve a message of type ```String```, increments the kamon counter and then passes on the message it received, unchanged.  The increment method can take any numeric parameter, or even none but it seems best to be explicit and increment the counter by one for every message it receieves.
+3. We bolt our new ```statsDExporterFlow``` onto the end of the existing stream graph so that it actually gets used.
+4. We change the ```SourceShape``` call to use the output of the ```statsDExporterFlow``` so that the output of our graph stream is exposed to the outside world as the output of our ```ThrottledProducer```.
+
+## Updating the DelayingActor ##
+The next step is to update our ```DelayingActor``` so that it increments a counter every time it processes a message.  Again, lets take a look at the fully updated class and look at the details afterwards.
+ 
+*DelayingActor.scala*
+```scala
+package com.datinko.asgard.bifrost.tutorial.actors
+
+import akka.stream.actor.ActorSubscriberMessage.{OnComplete, OnNext}
+import akka.stream.actor.{OneByOneRequestStrategy, RequestStrategy, ActorSubscriber}
+import com.typesafe.scalalogging.LazyLogging
+**import kamon.Kamon**
+
+/**
+ * An actor that introduces a fixed delay when processing each message.
+ */
+//Actor Subscriber trait extension is need so that this actor can be used as part of a stream
+class DelayingActor(name: String, delay: Long) extends ActorSubscriber with LazyLogging {
+  override protected def requestStrategy: RequestStrategy = OneByOneRequestStrategy
+
+  val actorName = name
+  **val consumeCounter = Kamon.metrics.counter("delayingactor-consumed-counter")**
+  
+  def this(name: String) {
+    this(name, 0)
+  }
+
+  override def receive: Receive = {
+    case OnNext(msg: String) =>
+      Thread.sleep(delay)
+      logger.debug(s"Message in delaying actor sink ${self.path} '$actorName': $msg")
+      **consumeCounter.increment(1)**
+    case OnComplete =>
+      logger.debug(s"Completed Messgae received in ${self.path} '$actorName'")
+    case msg =>
+      logger.debug(s"Unknown message $msg in $actorName: ")
+  }
+}
+```
+
+As before, we have some very minor changes to our ```DelayingActor``` to make it report metrics to Kamon.
+
+1. Add the Kamon dependency.
+2. Create a counter with a unique name so we can report the number of messages that have been consumed.  
+3. Increment the counter every time we actually consume a message from the stream.  (Note that because each metrics value is timestamped, Graphite can infer a rate from this information).
+
+Running the Application to Report Metrics
+===
+Because Kamon uses AspectJ to inject its monitoring and reporting code, we must run the application so that the AspectJ SBT plugin gets used.  The simplest way of doing this is to execute ```sbt run``` from the command line.  If you run the application from within your IDE you will see a large reminder that Kamon is not running correcly and no metrics are being recorded, a little something like this:
+
+```
+[ERROR] [12/31/2015 17:03:23.195] [main] [ModuleLoader(akka://kamon)] 
+
+  ___                           _      ___   _    _                                 ___  ___ _            _
+ / _ \                         | |    |_  | | |  | |                                |  \/  |(_)          (_)
+/ /_\ \ ___  _ __    ___   ___ | |_     | | | |  | |  ___   __ _ __   __ ___  _ __  | .  . | _  ___  ___  _  _ __    __ _
+|  _  |/ __|| '_ \  / _ \ / __|| __|    | | | |/\| | / _ \ / _` |\ \ / // _ \| '__| | |\/| || |/ __|/ __|| || '_ \  / _` |
+| | | |\__ \| |_) ||  __/| (__ | |_ /\__/ / \  /\  /|  __/| (_| | \ V /|  __/| |    | |  | || |\__ \\__ \| || | | || (_| |
+\_| |_/|___/| .__/  \___| \___| \__|\____/   \/  \/  \___| \__,_|  \_/  \___||_|    \_|  |_/|_||___/|___/|_||_| |_| \__, |
+            | |                                                                                                      __/ |
+            |_|                                                                                                     |___/
+
+ It seems like your application was not started with the -javaagent:/path-to-aspectj-weaver.jar option but Kamon detected
+ the following modules which require AspectJ to work properly:
+
+      kamon-akka, kamon-scala
+
+ If you need help on setting up the aspectj weaver go to http://kamon.io/introduction/get-started/ for more info. On the
+ other hand, if you are sure that you do not need or do not want to use the weaver then you can disable this error message
+ by changing the kamon.show-aspectj-missing-warning setting in your configuration file.
+```
