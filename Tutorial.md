@@ -486,7 +486,67 @@ Its worth discussing the minor changes we have had to make to ensure this actor 
 
 For more information on the ```ActorSubscriber``` check out the [http://doc.akka.io/api/akka-stream-and-http-experimental/2.0/index.html#akka.stream.actor.ActorSubscriber](http://doc.akka.io/api/akka-stream-and-http-experimental/2.0/index.html#akka.stream.actor.ActorSubscriber "documentation")
 
+Scenarios - Putting our ThrottledProducer and DelayingActor Together
+===
+Now we have some reuseable, configurable components it would be useful to put them together in a couple of scenarios that allow us to explore *backpressure* in action.  To achieve this we'll make a simple ```Scenarios``` object that has a function to setup and run each configuration we are interested in.
 
+*Scenarios.scala*
+```scala
+package com.datinko.asgard.bifrost.tutorial
+
+import akka.actor.Props
+import akka.stream.{ClosedShape}
+import akka.stream.scaladsl.{Sink, GraphDSL, RunnableGraph}
+import com.datinko.asgard.bifrost.actors.DelayingActor
+import scala.concurrent.duration._
+/**
+ * A set of test scenarios to demonstrate Akka Stream back pressure in action.  Metrics are exported
+ * to StatsD by Kamon so they can be graphed in Grafana.
+ */
+object Scenarios {
+
+  def fastPublisherFastSubscriber() = {
+
+    val theGraph = RunnableGraph.fromGraph(GraphDSL.create() { implicit builder =>
+
+      val source = builder.add(ThrottledProducer.produceThrottled(1 second, 20 milliseconds, 20000, "fastProducer"))
+      val fastSink = builder.add(Sink.actorSubscriber(Props(classOf[DelayingActor], "fastSink")))
+
+      import GraphDSL.Implicits._
+
+      source ~> fastSink
+
+      ClosedShape
+    })
+    theGraph
+  }
+}
+```  
+
+This function is very much like the ```SimpleStreams.printSimpleMessagesToConsole``` function we defined earlier.  We create a ```RunnableGraph``` that contains both a source and a sink.  The only area of interest is how we create the ```Sink``` so that it uses the ```DelayingActor``` we just defined.
+
+The ```Sink.actorSubscriber(...)``` provides an easy way for us to use an ```ActorSubscriber``` as a sink in a stream graph.
+
+To execute this from our ```Start.scala``` object (with its implicit actor system and implicit materializers) we use:
+
+```Scenarios.fastPublisherFastSubscriber().run()```
+   
+The output will be something similar to:
+```
+14:29:30.344 [Bifrost-akka.actor.default-dispatcher-6] DEBUG c.d.a.b.t.actors.DelayingActor - Message in delaying actor sink akka://Bifrost/user/StreamSupervisor-0/flow-0-1-actorSubscriberSink 'fastSink': Message 1
+14:29:30.353 [Bifrost-akka.actor.default-dispatcher-10] DEBUG c.d.a.b.t.actors.DelayingActor - Message in delaying actor sink akka://Bifrost/user/StreamSupervisor-0/flow-0-1-actorSubscriberSink 'fastSink': Message 2
+14:29:30.383 [Bifrost-akka.actor.default-dispatcher-6] DEBUG c.d.a.b.t.actors.DelayingActor - Message in delaying actor sink akka://Bifrost/user/StreamSupervisor-0/flow-0-1-actorSubscriberSink 'fastSink': Message 3
+14:29:30.393 [Bifrost-akka.actor.default-dispatcher-6] DEBUG c.d.a.b.t.actors.DelayingActor - Message in delaying actor sink akka://Bifrost/user/StreamSupervisor-0/flow-0-1-actorSubscriberSink 'fastSink': Message 4
+14:29:30.423 [Bifrost-akka.actor.default-dispatcher-10] DEBUG c.d.a.b.t.actors.DelayingActor - Message in delaying actor sink akka://Bifrost/user/StreamSupervisor-0/flow-0-1-actorSubscriberSink 'fastSink': Message 5
+14:29:30.433 [Bifrost-akka.actor.default-dispatcher-10] DEBUG c.d.a.b.t.actors.DelayingActor - Message in delaying actor sink akka://Bifrost/user/StreamSupervisor-0/flow-0-1-actorSubscriberSink 'fastSink': Message 6
+14:29:30.463 [Bifrost-akka.actor.default-dispatcher-10] DEBUG c.d.a.b.t.actors.DelayingActor - Message in delaying actor sink akka://Bifrost/user/StreamSupervisor-0/flow-0-1-actorSubscriberSink 'fastSink': Message 7
+14:29:30.473 [Bifrost-akka.actor.default-dispatcher-10] DEBUG c.d.a.b.t.actors.DelayingActor - Message in delaying actor sink akka://Bifrost/user/StreamSupervisor-0/flow-0-1-actorSubscriberSink 'fastSink': Message 8
+```
+
+From the debug messages we have output to the log we can see that the materializer creates an actor to process the stream graph 
+which has its own unique path in the akka actor system.  As hoped, this gives us some basic information that the Source and the Sink
+are publishing and receiving messages as expected, however, it would be nice to be able to see whats happening to the message
+flow in a more visual way.
 
 
 

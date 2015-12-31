@@ -22,7 +22,6 @@ object Scenarios {
       val source = builder.add(ThrottledProducer.produceThrottled(materializer, 1 second, 20 milliseconds, 20000, "fastProducer"))
       val fastSink = builder.add(Sink.actorSubscriber(Props(classOf[DelayingActor], "fastSink")))
 
-      //these are red because the source isn't actually a SourceShape
       source ~> fastSink
 
       ClosedShape
