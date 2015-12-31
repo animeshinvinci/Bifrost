@@ -573,7 +573,7 @@ Kamon is able to gather metrics about performance and health of our application 
 - **Grafana** is a frontend dashboard that provides a very attractive and flexible way of presenting the information aggregated by Graphite.  All of this updates in realtime.
 
 
-Because getting all these components up and running can be challenging, we are going to use a pre-configured Docker container where all the hard work has already been done.  This builds on the [http://kamon.io/teamblog/2014/04/27/get-started-quicker-with-our-docker-image/](http://kamon.io/teamblog/2014/04/27/get-started-quicker-with-our-docker-image/ "Kamon Docker Image") that the Kamon team have already created.  An even simpler implementation that we will use is based on a tutorial by Nepomuk Seiler which you can see [http://mukis.de/pages/monitoring-akka-with-kamon/](http://mukis.de/pages/monitoring-akka-with-kamon/ "here") is you want more details.
+Because getting all these components up and running can be challenging, we are going to use a pre-configured Docker container where all the hard work has already been done.  This builds on the [Kamon Docker Image](http://kamon.io/teamblog/2014/04/27/get-started-quicker-with-our-docker-image/ "Kamon Docker Image") that the Kamon team have already created.  An even simpler implementation that we will use is based on a tutorial by Nepomuk Seiler which you can see [here](http://mukis.de/pages/monitoring-akka-with-kamon/ "here") is you want more details.
 
 
 Adding Dependencies for Kamon
@@ -996,7 +996,102 @@ Experiments with Backpressure
 ===
 Finally!  Its been a long haul to get here, but we are finally in a position to be able to conduct some experiments with backpressure.
 
-The inspiration for this set of scenarios to demonstrate backpressure came from an article written Jos Dirksen.  You can check it out [http://www.smartjava.org/content/visualizing-back-pressure-and-reactive-streams-akka-streams-statsd-grafana-and-influxdb](http://www.smartjava.org/content/visualizing-back-pressure-and-reactive-streams-akka-streams-statsd-grafana-and-influxdb "here").  
+The inspiration for this set of scenarios to demonstrate backpressure came from an article written Jos Dirksen.  You can check it out [here](http://www.smartjava.org/content/visualizing-back-pressure-and-reactive-streams-akka-streams-statsd-grafana-and-influxdb "here").
 
 ## Scenario - Fast Source, Slowing Sink ##
+
+We have already seen above a Fast producing source and a fast consuming sink.  Things get a little more interesting when we have a sink that consumes messages more slowly over time.  This is a classic situation where, normally, the Source would just keep pumping out messages and the Sink would be expected to buffer the messages until it could catch up.  As we all know, this rarely happens.  Usually the buffer fills and the Sink gets overwhelmed.  
+
+To conduct our experiment we need another actor that gets slower at processing messages over time.  Introducing the ```SlowDownActor.scala```.
+
+*SlowDownActor.scala*
+```scala
+package com.datinko.asgard.bifrost.tutorial.actors
+
+import akka.stream.actor.ActorSubscriberMessage.OnNext
+import akka.stream.actor.{RequestStrategy, OneByOneRequestStrategy, ActorSubscriber}
+import com.typesafe.scalalogging.LazyLogging
+import kamon.Kamon
+
+/**
+ * An actor that progressively slows as it processes messages.
+ */
+class SlowDownActor(name: String, delayPerMsg: Long, initialDelay: Long) extends ActorSubscriber with LazyLogging {
+  override protected def requestStrategy: RequestStrategy = OneByOneRequestStrategy
+
+  // setup actorname to provided name for better tracing of stats
+  val actorName = name
+  val consumeCounter = Kamon.metrics.counter("slowdownactor-consumed-counter")
+
+  // default delay is 0
+  var delay = 0l
+
+  def this(name: String) {
+    this(name, 0, 0)
+  }
+
+  def this(name: String, delayPerMsg: Long) {
+    this(name, delayPerMsg, 0)
+  }
+
+  override def receive: Receive = {
+
+    case OnNext(msg: String) =>
+      delay += delayPerMsg
+      Thread.sleep(initialDelay + (delay / 1000), delay % 1000 toInt)
+      logger.debug(s"Message in slowdown actor sink ${self.path} '$actorName': $msg")
+      consumeCounter.increment(1)
+    case msg =>
+      logger.debug(s"Unknown message $msg in $actorName: ")
+  }
+}
+```
+
+Once we have this we can add a new scenario to our existing ```Scenarios.scala``` object.
+
+*Scenarios.scala*
+```scala
+package com.datinko.asgard.bifrost.tutorial
+
+import akka.actor.Props
+import akka.stream.{ActorMaterializer, ClosedShape}
+import akka.stream.scaladsl.{Sink, GraphDSL, RunnableGraph}
+import com.datinko.asgard.bifrost.actors.SlowDownActor
+import scala.concurrent.duration._
+/**
+ * A set of test scenarios to demonstrate Akka Stream back pressure in action.  Metrics are exported
+ * to StatsD by Kamon so they can be graphed in Grafana.
+ */
+object Scenarios {
+
+   ... existing scenarios ...
+
+  def fastPublisherSlowingSubscriber(implicit materializer: ActorMaterializer) = {
+
+    val theGraph = RunnableGraph.fromGraph(GraphDSL.create() { implicit builder: GraphDSL.Builder[Unit] =>
+
+      val source = builder.add(ThrottledProducer.produceThrottled(1 second, 30 milliseconds, 20000, "fastProducer"))
+      val slowingSink = builder.add(Sink.actorSubscriber(Props(classOf[SlowDownActor], "slowingDownSink", 10l)))
+
+      import GraphDSL.Implicits._
+
+      source ~> slowingSink
+
+      ClosedShape
+    })
+    theGraph
+  }
+}
+
+```
+
+If we execute this scenario in ```Start.scala``` with 
+
+```tutorial.Scenarios.fastPublisherSlowingSubscriber().run()```
+
+and take a look at Grafana (having updated our Sink metric to be 'slowdownactor-consumed-counter')  we get:
+
+![](http://i.imgur.com/1iw23Py.png)
+
+This chart shows that as the Sink processes messages an an increasingly slow rate, the producer slows its production rate.  These is because of the backpressure in the stream coming from the Sink to the Source.  As it struggles to consume messages the Sink signals that it needs more messages less often, this causes the Source to slow down.  The message production rate is actually controlled by the SlowDownActor (the Sink).
 

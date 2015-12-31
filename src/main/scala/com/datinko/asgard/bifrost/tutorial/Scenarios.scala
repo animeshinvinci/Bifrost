@@ -3,6 +3,7 @@ package com.datinko.asgard.bifrost.tutorial
 import akka.actor.Props
 import akka.stream.{ClosedShape}
 import akka.stream.scaladsl.{Sink, GraphDSL, RunnableGraph}
+import com.datinko.asgard.bifrost.tutorial.actors.SlowDownActor
 import scala.concurrent.duration._
 /**
  * A set of test scenarios to demonstrate Akka Stream back pressure in action.  Metrics are exported
@@ -20,6 +21,22 @@ object Scenarios {
       import GraphDSL.Implicits._
 
       source ~> fastSink
+
+      ClosedShape
+    })
+    theGraph
+  }
+
+  def fastPublisherSlowingSubscriber() = {
+
+    val theGraph = RunnableGraph.fromGraph(GraphDSL.create() { implicit builder: GraphDSL.Builder[Unit] =>
+
+      val source = builder.add(ThrottledProducer.produceThrottled(1 second, 30 milliseconds, 20000, "fastProducer"))
+      val slowingSink = builder.add(Sink.actorSubscriber(Props(classOf[SlowDownActor], "slowingDownSink", 50l)))
+
+      import GraphDSL.Implicits._
+
+      source ~> slowingSink
 
       ClosedShape
     })
