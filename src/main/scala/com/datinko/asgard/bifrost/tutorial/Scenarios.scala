@@ -3,7 +3,6 @@ package com.datinko.asgard.bifrost.tutorial
 import akka.actor.Props
 import akka.stream.{ClosedShape}
 import akka.stream.scaladsl.{Sink, GraphDSL, RunnableGraph}
-import com.datinko.asgard.bifrost.actors.DelayingActor
 import scala.concurrent.duration._
 /**
  * A set of test scenarios to demonstrate Akka Stream back pressure in action.  Metrics are exported

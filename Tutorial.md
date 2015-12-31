@@ -563,7 +563,12 @@ Kamon is able to gather metrics about performance and health of our application 
 
 ![](http://i.imgur.com/i6jbqP4.png)
 
-- **Kamon** is a library that uses AspectJ to hook into the method calls made by your ActorSystem and record events of different types.  There are a range of actor system metrics that are gathered automatically.  You can also add your own metrics to be recorded as the application runs.  The default configuration works pretty well but it takes a little digging to get everything up and running, mostly becuase the library is evolving quickly.
+- 
+- 
+- 
+- 
+- 
+- Kamon** is a library that uses AspectJ to hook into the method calls made by your ActorSystem and record events of different types.  There are a range of actor system metrics that are gathered automatically.  You can also add your own metrics to be recorded as the application runs.  The default configuration works pretty well but it takes a little digging to get everything up and running, mostly becuase the library is evolving quickly.
 - **StatsD** - **Graphite** is a network daemon that runs on the Node.js platform and listens for information like counters and timers sent over UDP.  StatsD then sends its information to be aggregated by a range of pluggable backend services.  In our case, we will use Graphite.
 - **Grafana** is a frontend dashboard that provides a very attractive and flexible way of presenting the information aggregated by Graphite.  All of this updates in realtime.
 
@@ -795,7 +800,7 @@ The first step is to update our ```ThrottledProducer``` so that it increments a 
 import akka.stream.{SourceShape}
 import akka.stream.scaladsl.{Flow, Zip, GraphDSL, Source}
 import com.datinko.asgard.bifrost.Tick
-**import kamon.Kamon**
+import kamon.Kamon
 
 import scala.concurrent.duration.FiniteDuration
 
@@ -813,8 +818,8 @@ object ThrottledProducer {
     //define a stream to bring it all together..
     val throttledStream = Source.fromGraph(GraphDSL.create() { implicit builder =>
 
-      **//1. create a Kamon counter so we can track number of messages produced
-      val createCounter = Kamon.metrics.counter("throttledProducer-create-counter")**
+      //1. create a Kamon counter so we can track number of messages produced
+      val createCounter = Kamon.metrics.counter("throttledProducer-create-counter")
 
       //define a zip operation that expects a tuple with a Tick and a Message in it..
       //(Note that the operations must be added to the builder before they can be used)
@@ -823,9 +828,8 @@ object ThrottledProducer {
       //create a flow to extract the second element in the tuple (our message - we dont need the tick part after this stage)
       val messageExtractorFlow = builder.add(Flow[(Tick.type, String)].map(_._2))
 
-      **//2. create a flow to log performance information to Kamon and pass on the message object unmolested
-      val statsDExporterFlow = builder.add(Flow[(String)].map{message => createCounter.increment(1); message})**
-
+      //2. create a flow to log performance information to Kamon and pass on the message object unmolested
+      val statsDExporterFlow = builder.add(Flow[(String)].map{message => createCounter.increment(1); message})
 
       //import this so we can use the ~> syntax
       import GraphDSL.Implicits._
@@ -839,7 +843,7 @@ object ThrottledProducer {
       //this is the message, we dont care about the Tick, it was just for timing and we can throw it away.
 	  //3. Then we route the output of the extractor to a flow that exports data to StatsD
       //then route that to the 'out' Sink as before.
-      **zip.out ~> messageExtractorFlow ~> statsDExporterFlow**
+      zip.out ~> messageExtractorFlow ~> statsDExporterFlow
 
       //4.  make sure we pass the right output to the SourceShape outlet
       SourceShape(statsDExporterFlow.out)
@@ -849,7 +853,7 @@ object ThrottledProducer {
 }
 ```
 
-The changes we've made are highlighted in bold.  The first and most obvious change is to import the Kamon dependency.  The other changes in detail are:
+The changes we've made are highlighted in bold.  The first and most obvious change is to import the Kamon dependency, ```import kamon.Kamon```.  The other changes in detail are:
 
 1. We create a named Kamon metrics counter.  This needs to have a unique name that helps us and Kamon identify it.  The counter 'recording instrument' as Kamon call it has two simple methods of ```increment``` and ```decrement```.  We'll only be using ```increment```.
 2. We create a graph flow that expects to receieve a message of type ```String```, increments the kamon counter and then passes on the message it received, unchanged.  The increment method can take any numeric parameter, or even none but it seems best to be explicit and increment the counter by one for every message it receieves.
@@ -866,7 +870,7 @@ package com.datinko.asgard.bifrost.tutorial.actors
 import akka.stream.actor.ActorSubscriberMessage.{OnComplete, OnNext}
 import akka.stream.actor.{OneByOneRequestStrategy, RequestStrategy, ActorSubscriber}
 import com.typesafe.scalalogging.LazyLogging
-**import kamon.Kamon**
+import kamon.Kamon
 
 /**
  * An actor that introduces a fixed delay when processing each message.
@@ -876,7 +880,7 @@ class DelayingActor(name: String, delay: Long) extends ActorSubscriber with Lazy
   override protected def requestStrategy: RequestStrategy = OneByOneRequestStrategy
 
   val actorName = name
-  **val consumeCounter = Kamon.metrics.counter("delayingactor-consumed-counter")**
+  val consumeCounter = Kamon.metrics.counter("delayingactor-consumed-counter")
   
   def this(name: String) {
     this(name, 0)
@@ -886,7 +890,7 @@ class DelayingActor(name: String, delay: Long) extends ActorSubscriber with Lazy
     case OnNext(msg: String) =>
       Thread.sleep(delay)
       logger.debug(s"Message in delaying actor sink ${self.path} '$actorName': $msg")
-      **consumeCounter.increment(1)**
+      consumeCounter.increment(1)
     case OnComplete =>
       logger.debug(s"Completed Messgae received in ${self.path} '$actorName'")
     case msg =>
@@ -897,9 +901,9 @@ class DelayingActor(name: String, delay: Long) extends ActorSubscriber with Lazy
 
 As before, we have some very minor changes to our ```DelayingActor``` to make it report metrics to Kamon.
 
-1. Add the Kamon dependency.
-2. Create a counter with a unique name so we can report the number of messages that have been consumed.  
-3. Increment the counter every time we actually consume a message from the stream.  (Note that because each metrics value is timestamped, Graphite can infer a rate from this information).
+1. Add the Kamon dependency, ```import kamon.Kamon```.
+2. Create a counter with a unique name so we can report the number of messages that have been consumed, ```val consumeCounter = Kamon.metrics.counter("delayingactor-consumed-counter")```  
+3. Increment the counter every time we actually consume a message from the stream.  (Note that because each metrics value is timestamped, Graphite can infer a rate from this information), ```consumeCounter.increment(1)```
 
 Running the Application to Report Metrics
 ===
@@ -931,7 +935,7 @@ When everything is running correctly you should see:
 
 ```
 [info] Running com.datinko.asgard.bifrost.Start
-**[info] [INFO] [12/31/2015 17:12:21.301] [main] [StatsDExtension(akka://Bifrost)] Starting the Kamon(StatsD) extension**
+[info] [INFO] [12/31/2015 17:12:21.301] [main] [StatsDExtension(akka://Bifrost)] Starting the Kamon(StatsD) extension
 [info] 17:12:24.204 [Bifrost-akka.actor.default-dispatcher-6] DEBUG c.d.a.b.t.actors.DelayingActor - Message in delaying actor sink akka://Bifrost/user/StreamSupervisor-0/flow-0-1-actorSubscriberSink 'fastSink': M
 essage 1
 [info] 17:12:24.229 [Bifrost-akka.actor.default-dispatcher-5] DEBUG c.d.a.b.t.actors.DelayingActor - Message in delaying actor sink akka://Bifrost/user/StreamSupervisor-0/flow-0-1-actorSubscriberSink 'fastSink': M
@@ -944,3 +948,55 @@ essage 4
 essage 5
 ...
 ```
+
+Updating Grafana to Show our Metrics
+===
+Now that our application is sending metrics to Graphite, we can customise our Grafana dashboard to show us some pretty charts of that data.
+
+1. Using your browser, navigate to ```http://192.168.99.100/``` (or 127.0.0.1 on Linux) and this should show you the default Grafana dashboard.
+2. A random line chart will be shown at the bottom of the dashboard.  Click on the title of the chart, 'First Graph (click to edit)' and click 'Edit' from the menu that appears.
+3. The display will change to show some edit controls.
+4. Click on the 'Metrics' tab and from the list shown in the bottom half of the screen click on the 'select metric' box. This will display a list of all sources of data that are available. 
+5. Click the 'stats' entry.
+6. Click the 'select metric' title that appears in the next box. Click the 'counters' entry.
+7. Click the 'select metric' title that appears in the next box. Click the 'Bifrost' entry.  (If you called your application something else, then you should see it here).
+8. Click the 'select metric' title that appears in the next box.  Click the entry that is shown (this is usually the hostname of your machine).
+9. Click the 'select metric' title that appears in the next box.  Click the 'counter' entry.
+10. Click the 'select metric' title that appears in the next box.  You should now see a list of the counters we defined:  'throttledProducer-create-counter' and 'delayingActor-consumed-counter'.  Choose 'throttledProducer-create-counter' for now.
+11. Click the 'select metric' title that appears in the next box.  Click the 'count' entry.
+
+All being well, you should now see a chart showing the rate at which our ThrottledProducer is creating messages and pushing them into the steam.
+
+![](http://i.imgur.com/R6U4y0V.png)
+
+Following a similar process we can add a line to show the rate at which our Sink is consuming messages.
+
+1.  Click the 'Add Query' button at the bottom right of the screen and follow steps 5 to 9 above.
+2.  At step 10, choose 'delayingActor-consumed-counter'
+3.  Click the 'select metric' title that appears in the next box.  Click the 'count' entry.
+
+This will add a series line for our Sink so that we can see the Source and Sink message rates on the same chart.  With the default settings you will get something looking like this (which doesn't look quite right!):
+
+![](http://i.imgur.com/449mb7w.png)
+
+At first glance it looks like our Sink is actually consuming twice as many messages as our Source.  This is actually just a 'Display Style' setting that we can change:
+
+1. Click the 'Display Styles' tab.
+2. Ensure the 'Stack' option in the 'Multiple Series' area is unchecked.
+
+![](http://i.imgur.com/KvocaIm.png)
+
+Both series lines will now sit on top of each other.  To prove that both lines are actually still present, click on the 'Metrics' tab and then click the eye icon that is next to each entry.  This will toggle the visibility of each series.  Despite the annoying habit of Grafana to change the colour of the series when their visibility is toggled we can prove to ourselves that both series are identical. 
+
+In other words, our ThrottledProducer (our Source) is creating and sending messages as fast as the DelayingActor (our Sink) is able to produce them.  Believe it or not, this is back pressure in action.
+
+Well, okay.. but maybe we're not totally convinced?  Let's do some more experiments.
+
+Experiments with Backpressure
+===
+Finally!  Its been a long haul to get here, but we are finally in a position to be able to conduct some experiments with backpressure.
+
+The inspiration for this set of scenarios to demonstrate backpressure came from an article written Jos Dirksen.  You can check it out [http://www.smartjava.org/content/visualizing-back-pressure-and-reactive-streams-akka-streams-statsd-grafana-and-influxdb](http://www.smartjava.org/content/visualizing-back-pressure-and-reactive-streams-akka-streams-statsd-grafana-and-influxdb "here").  
+
+## Scenario - Fast Source, Slowing Sink ##
+
