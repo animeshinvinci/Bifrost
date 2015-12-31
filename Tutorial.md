@@ -1087,7 +1087,7 @@ object Scenarios {
 
 If we execute this scenario in ```Start.scala``` with 
 
-```tutorial.Scenarios.fastPublisherSlowingSubscriber().run()```
+tutorial.Scenarios.fastPublisherSlowingSubscriber().run()
 
 and take a look at Grafana (having updated our Sink metric to be 'slowdownactor-consumed-counter')  we get:
 
