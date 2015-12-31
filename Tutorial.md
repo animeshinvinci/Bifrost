@@ -926,3 +926,21 @@ Because Kamon uses AspectJ to inject its monitoring and reporting code, we must 
  other hand, if you are sure that you do not need or do not want to use the weaver then you can disable this error message
  by changing the kamon.show-aspectj-missing-warning setting in your configuration file.
 ```
+
+When everything is running correctly you should see:
+
+```
+[info] Running com.datinko.asgard.bifrost.Start
+**[info] [INFO] [12/31/2015 17:12:21.301] [main] [StatsDExtension(akka://Bifrost)] Starting the Kamon(StatsD) extension**
+[info] 17:12:24.204 [Bifrost-akka.actor.default-dispatcher-6] DEBUG c.d.a.b.t.actors.DelayingActor - Message in delaying actor sink akka://Bifrost/user/StreamSupervisor-0/flow-0-1-actorSubscriberSink 'fastSink': M
+essage 1
+[info] 17:12:24.229 [Bifrost-akka.actor.default-dispatcher-5] DEBUG c.d.a.b.t.actors.DelayingActor - Message in delaying actor sink akka://Bifrost/user/StreamSupervisor-0/flow-0-1-actorSubscriberSink 'fastSink': M
+essage 2
+[info] 17:12:24.239 [Bifrost-akka.actor.default-dispatcher-4] DEBUG c.d.a.b.t.actors.DelayingActor - Message in delaying actor sink akka://Bifrost/user/StreamSupervisor-0/flow-0-1-actorSubscriberSink 'fastSink': M
+essage 3
+[info] 17:12:24.259 [Bifrost-akka.actor.default-dispatcher-6] DEBUG c.d.a.b.t.actors.DelayingActor - Message in delaying actor sink akka://Bifrost/user/StreamSupervisor-0/flow-0-1-actorSubscriberSink 'fastSink': M
+essage 4
+[info] 17:12:24.294 [Bifrost-akka.actor.default-dispatcher-3] DEBUG c.d.a.b.t.actors.DelayingActor - Message in delaying actor sink akka://Bifrost/user/StreamSupervisor-0/flow-0-1-actorSubscriberSink 'fastSink': M
+essage 5
+...
+```
