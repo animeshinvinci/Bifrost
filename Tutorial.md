@@ -532,6 +532,7 @@ To execute this from our ```Start.scala``` object (with its implicit actor syste
 ```Scenarios.fastPublisherFastSubscriber().run()```
    
 The output will be something similar to:
+
 ```
 14:29:30.344 [Bifrost-akka.actor.default-dispatcher-6] DEBUG c.d.a.b.t.actors.DelayingActor - Message in delaying actor sink akka://Bifrost/user/StreamSupervisor-0/flow-0-1-actorSubscriberSink 'fastSink': Message 1
 14:29:30.353 [Bifrost-akka.actor.default-dispatcher-10] DEBUG c.d.a.b.t.actors.DelayingActor - Message in delaying actor sink akka://Bifrost/user/StreamSupervisor-0/flow-0-1-actorSubscriberSink 'fastSink': Message 2
