@@ -1097,3 +1097,51 @@ This chart shows that as the Sink processes messages an an increasingly slow rat
  These is because of the backpressure in the stream coming from the Sink to the Source.  As it struggles to consume
   messages the Sink signals that it needs messages less often, this causes the Source to slow down.  The message 
   production rate is actually controlled by the SlowDownActor (the Sink).
+
+## Scenario - Fast Source, Slowing Sink with Drop Buffer ##
+
+Akka Streams has a built in component, the buffer, that helps us to deal with situations where the Source is going too fast for the Subscriber.  This is useful in situations where the Source isn't reactive and doesn't respond to backpressure messages.
+
+To illustrate the buffer in action, add the following scenario to ```Scenarios.scala```:
+
+*Scenario.scala*
+```scala
+def fastPublisherSlowingSubscriberWithDropBuffer() = {
+
+    val theGraph = RunnableGraph.fromGraph(GraphDSL.create() { implicit builder: GraphDSL.Builder[Unit] =>
+
+      val source = builder.add(ThrottledProducer.produceThrottled(1 second, 30 milliseconds, 20000, "fastProducer"))
+      val slowingSink = builder.add(Sink.actorSubscriber(Props(classOf[SlowDownActor], "slowingDownSink", 50l)))
+
+      // create a buffer, with 100 messages, with an overflow
+      // strategy that starts dropping the oldest messages when it is getting
+      // too far behind.
+      val bufferFlow = Flow[String].buffer(100, OverflowStrategy.dropHead)
+      
+      import GraphDSL.Implicits._
+
+      source ~> bufferFlow ~> slowingSink
+
+      ClosedShape
+    })
+    theGraph
+  }
+```   
+
+Running this scenario results in the follow chart in Grafana:
+
+![](http://i.imgur.com/K4bsIA2.png)
+
+From this chart we can see that the Source essentially ignores the Sink as all of its messages are sent to the buffer.  Because of the strategy used in the buffer it will never signal any backpressure, it will simply drop messages.
+
+It is interesting to note that once the Source has produced all 6000 messages it was configured to send, the Sink keeps running to empty the buffer of the remaining messages.  Bear in mind that the buffer is dropping messages when it contains more than 100 messages.
+
+This in not exactly an ideal arrangement and we can improve upon it.
+
+## Scenario - Fast Source, Slowing Sink with Backpressure Buffer ##
+
+Having a buffer that drops mesages is less than ideal.  In situations where we have a reactive Source that will respond to backpressure signals but we still want to use a buffer we can simply change the ```OverflowStrategy``` of the buffer to ```OverflowStrategy.backpressure``` and we get the following chart in Grafana:
+
+![](http://i.imgur.com/wzXGEjY.png)
+
+As we can see from this chart, The Source ignores the Sink up until the buffer is full.  Once the buffer is full it signals backpressure and the Source slows its rate to meet the requirements of the Sink.  Once the message run is complete the producer stops and the Sink empties the buffer. 
