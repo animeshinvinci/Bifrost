@@ -568,7 +568,7 @@ Kamon is able to gather metrics about performance and health of our application 
 - 
 - 
 - 
-- Kamon** is a library that uses AspectJ to hook into the method calls made by your ActorSystem and record events of different types.  There are a range of actor system metrics that are gathered automatically.  You can also add your own metrics to be recorded as the application runs.  The default configuration works pretty well but it takes a little digging to get everything up and running, mostly becuase the library is evolving quickly.
+- **Kamon** is a library that uses AspectJ to hook into the method calls made by your ActorSystem and record events of different types.  There are a range of actor system metrics that are gathered automatically.  You can also add your own metrics to be recorded as the application runs.  The default configuration works pretty well but it takes a little digging to get everything up and running, mostly becuase the library is evolving quickly.
 - **StatsD** - **Graphite** is a network daemon that runs on the Node.js platform and listens for information like counters and timers sent over UDP.  StatsD then sends its information to be aggregated by a range of pluggable backend services.  In our case, we will use Graphite.
 - **Grafana** is a frontend dashboard that provides a very attractive and flexible way of presenting the information aggregated by Graphite.  All of this updates in realtime.
 
