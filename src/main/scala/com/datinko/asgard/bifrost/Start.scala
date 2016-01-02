@@ -34,9 +34,13 @@ object Start extends App {
   ////Thread.sleep(2000)
   //SimpleRabbitConsumer.consume.run()
 
-  //tutorial.Scenarios.fastPublisherFastSubscriber().run()
-  //tutorial.Scenarios.fastPublisherSlowingSubscriberWithDropBuffer().run()
-  tutorial.Scenarios.fastPublisherSlowingSubscriberWithBackpressureBuffer().run()
+  //tutorial.Scenarios.fastPublisherFastSubscriber.run
+  //tutorial.Scenarios.fastPublisherSlowingSubscriberWithDropBuffer.run
+  //tutorial.Scenarios.fastPublisherSlowingSubscriberWithBackpressureBuffer.run
+  //tutorial.Scenarios.fastPublisherFastSubscriberAndSlowingSubscriber.run
+  //tutorial.Scenarios.fastPublisherFastSubscriberAndSlowingSubscriberWithDroppingBuffer.run
+  //tutorial.Scenarios.fastPublisherFastSubscriberAndSlowingSubscriberWithBackpressureBuffer.run
+  tutorial.Scenarios.fastPublisherFastSubscriberAndSlowingSubscriberWithBalancer.run
 
   //Scenarios.fastPublisherSlowingSubscriber(materializer).run()
   //Scenarios.fastPublisherSlowingSubscriberWithDropBuffer(materializer).run()

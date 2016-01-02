@@ -1139,4 +1139,164 @@ Having a buffer that drops mesages is less than ideal.  In situations where we h
 
 ![](http://i.imgur.com/wzXGEjY.png)
 
-As we can see from this chart, The Source ignores the Sink up until the buffer is full.  Once the buffer is full it signals backpressure and the Source slows its rate to meet the requirements of the Sink.  Once the message run is complete the producer stops and the Sink empties the buffer. 
+As we can see from this chart, The Source ignores the Sink up until the buffer is full.  Once the buffer is full it signals backpressure and the Source slows its rate to meet the requirements of the Sink.  Once the message run is complete the producer stops and the Sink empties the buffer.
+
+## Scenario - Fast Source With Two Sinks, One Fast, One Slowing ##
+
+So far we have only looked at stream graphs with one Source and one Sink.  It would be interesting to look at what happens when we have two Sinks.  This also gives us an opportunity to look at another component in the akka stream toolbox.
+
+Let's create another scenario to test this out:
+
+*Scenarios.scala*
+```scala
+
+def fastPublisherFastSubscriberAndSlowingSubscriber() = {
+
+    val theGraph = RunnableGraph.fromGraph(GraphDSL.create() { implicit builder: GraphDSL.Builder[Unit] =>
+
+      val source = builder.add(ThrottledProducer.produceThrottled(1 second, 30 milliseconds, 9000, "fastProducer"))
+      val fastSink = builder.add(Sink.actorSubscriber(Props(classOf[actors.DelayingActor], "fastSink")))
+      val slowingSink = builder.add(Sink.actorSubscriber(Props(classOf[SlowDownActor], "slowingDownSink", 50l)))
+
+      // create the broadcast component
+      val broadcast = builder.add(Broadcast[String](2))
+
+      import GraphDSL.Implicits._
+
+      source ~> broadcast.in
+      broadcast.out(0) ~> fastSink
+      broadcast.out(1) ~> slowingSink
+
+      ClosedShape
+    })
+    theGraph
+  }
+
+```
+ The ```Broadcast``` component accepts one input that it then duplicates it to as many outputs as you wish.  In this example we have wired two output.  One output is to our Fast Sink.  The other is to our Slowing Sink.
+
+Running this scenario gives us the following Grafana chart:
+
+![](http://i.imgur.com/u4h8xaY.png)
+
+Looking closely we can see that the whole stream is limited to the rate of the slowest sink.  This sink signals that it needs the producer to slow down, so the producer slows, which slows the rate at which it passes messages to the fast sink as well as the slow sink.
+
+## Scenario - Fast Source With Two Sinks, One Fast, One Slowing with a Dropping Buffer ##
+
+Having a stream graph that is limited to the rate of the slowest sink is not ideal.  One way of overcoming this limitation is to introduce a buffer between the source and the slow sink.  Consider the following scenario.
+
+*Scenario.scala*
+
+```scala
+
+def fastPublisherFastSubscriberAndSlowingSubscriberWithDroppingBuffer() = {
+
+    val theGraph = RunnableGraph.fromGraph(GraphDSL.create() { implicit builder: GraphDSL.Builder[Unit] =>
+
+      val source = builder.add(ThrottledProducer.produceThrottled(1 second, 30 milliseconds, 9000, "fastProducer"))
+      val fastSink = builder.add(Sink.actorSubscriber(Props(classOf[actors.DelayingActor], "fastSink")))
+      val slowingSink = builder.add(Sink.actorSubscriber(Props(classOf[SlowDownActor], "slowingDownSink", 50l)))
+      val broadcast = builder.add(Broadcast[String](2))
+
+      val bufferFlow = Flow[String].buffer(300, OverflowStrategy.dropHead)
+
+      import GraphDSL.Implicits._
+
+      source ~> broadcast.in
+      broadcast.out(0) ~> fastSink
+      broadcast.out(1) ~> bufferFlow ~> slowingSink
+
+      ClosedShape
+    })
+    theGraph
+  }
+```
+
+Running this scenario we get the following output:
+
+![](http://i.imgur.com/gZBoTAG.png) 
+
+As we can see, the source and the fast sink continue at maximum speed until all the messages are produced.  The slow sink proceeds at its own rate because the buffer ensures that it never gets overwhelmed.  However, this is at the cost of dropping messages!
+
+## Scenario - Fast Source With Two Sinks, One Fast, One Slowing with a Backpressure Buffer ##
+
+While buffering is useful when dealing with sinks that are able to processes messages at different rates, dropping messages is far from ideal in most situations.  If we use a bigger buffer with a *backpressure* overflow strategy, we can improve on our previous example.
+
+*Scenario.scala*
+
+```scala
+
+def fastPublisherFastSubscriberAndSlowingSubscriberWithBackpressureBuffer() = {
+
+    val theGraph = RunnableGraph.fromGraph(GraphDSL.create() { implicit builder: GraphDSL.Builder[Unit] =>
+
+      val source = builder.add(ThrottledProducer.produceThrottled(1 second, 30 milliseconds, 9000, "fastProducer"))
+      val fastSink = builder.add(Sink.actorSubscriber(Props(classOf[actors.DelayingActor], "fastSink")))
+      val slowingSink = builder.add(Sink.actorSubscriber(Props(classOf[SlowDownActor], "slowingDownSink", 50l)))
+      val broadcast = builder.add(Broadcast[String](2))
+
+      val bufferFlow = Flow[String].buffer(3500, OverflowStrategy.backpressure)
+
+      import GraphDSL.Implicits._
+
+      source ~> broadcast.in
+      broadcast.out(0) ~> fastSink
+      broadcast.out(1) ~> bufferFlow ~> slowingSink
+
+      ClosedShape
+    })
+    theGraph
+  }
+```
+
+This produces the following output:
+
+![](http://i.imgur.com/tq808my.png)
+
+In this scenario, the source and the fast sink process messages as fast as possible until the buffer for the slow sink fills to its limit.  Once this happens, the buffer signals backpressure and the source slows to the rate of the slow sink.
+
+## Scenario - Fast Source With Two Sinks, One Fast, One Slowing with a Balancer ##
+
+Buffering with backpressure is a good solution to our problem but there is another alternative which is a little more adaptive and ensures good utilisation of both subscribers.
+
+The ```Balancer``` is a component that sends messages to an available sink.  As the slow subscriber slows, more messages will be sent to the fast sink.  Eventually the majority of messages will be sent to the fast sink.
+
+*Scenarios.scala*
+
+```scala
+
+def fastPublisherFastSubscriberAndSlowingSubscriberWithBalancer() = {
+
+    val theGraph = RunnableGraph.fromGraph(GraphDSL.create() { implicit builder: GraphDSL.Builder[Unit] =>
+
+      val source = builder.add(ThrottledProducer.produceThrottled(1 second, 30 milliseconds, 9000, "fastProducer"))
+      val fastSink = builder.add(Sink.actorSubscriber(Props(classOf[actors.DelayingActor], "fastSink")))
+      val slowingSink = builder.add(Sink.actorSubscriber(Props(classOf[SlowDownActor], "slowingDownSink", 50l)))
+      val balancer = builder.add(Balance[String](2))
+
+      import GraphDSL.Implicits._
+
+      source ~> balancer.in
+      balancer.out(0) ~> fastSink
+      balancer.out(1) ~> slowingSink
+
+      ClosedShape
+    })
+    theGraph
+  }
+
+```
+
+Running this scenario gives us the following output:
+
+![](http://i.imgur.com/KmE1YZV.png)
+
+Although its fairly subtle on this graph, as the slow sink gets slower the fast sinks picks up more of the messages.  Throughout this scenario the source never slows as it the balancer never signals any backpressure.  It is is worth nothing that if the fast sink gets overloaded, it will signal backpressure to the balancer and the balancer will signal the source, which will slow its rate of message production.
+
+# Conclusion #
+
+This has been a rather lengthy journey into reactive streams using akka-streams and the supporting tooling.  Along the way we've learnt a lot about how to create stream graphs, how to monitor them and how to use akka actors to encapsulate the functionality we need.  
+
+There are more components to explore in akka-streams and more and more common tools are exposing reactive endpoints.  For example, both RabbitMQ and Kafka have reactive implementations that allow us to propogate backpressure from our akka streams to those components.
+
+Reactive streams give us a really effective way of building flexible and adaptive message processing pipelines.  Hopefully this tutorial has provided enough information for you do take a look for yourselves. 

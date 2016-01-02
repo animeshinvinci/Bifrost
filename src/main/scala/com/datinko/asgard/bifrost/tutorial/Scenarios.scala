@@ -2,7 +2,7 @@ package com.datinko.asgard.bifrost.tutorial
 
 import akka.actor.Props
 import akka.stream.{OverflowStrategy, ClosedShape}
-import akka.stream.scaladsl.{Flow, Sink, GraphDSL, RunnableGraph}
+import akka.stream.scaladsl._
 import com.datinko.asgard.bifrost.tutorial.actors.SlowDownActor
 import io.scalac.amqp.Message
 import scala.concurrent.duration._
@@ -80,6 +80,92 @@ object Scenarios {
       import GraphDSL.Implicits._
 
       source ~> bufferFlow ~> slowingSink
+
+      ClosedShape
+    })
+    theGraph
+  }
+
+  def fastPublisherFastSubscriberAndSlowingSubscriber() = {
+
+    val theGraph = RunnableGraph.fromGraph(GraphDSL.create() { implicit builder: GraphDSL.Builder[Unit] =>
+
+      val source = builder.add(ThrottledProducer.produceThrottled(1 second, 30 milliseconds, 9000, "fastProducer"))
+      val fastSink = builder.add(Sink.actorSubscriber(Props(classOf[actors.DelayingActor], "fastSink")))
+      val slowingSink = builder.add(Sink.actorSubscriber(Props(classOf[SlowDownActor], "slowingDownSink", 50l)))
+
+      // create the broadcast component
+      val broadcast = builder.add(Broadcast[String](2))
+
+      import GraphDSL.Implicits._
+
+      source ~> broadcast.in
+      broadcast.out(0) ~> fastSink
+      broadcast.out(1) ~> slowingSink
+
+      ClosedShape
+    })
+    theGraph
+  }
+
+  def fastPublisherFastSubscriberAndSlowingSubscriberWithDroppingBuffer() = {
+
+    val theGraph = RunnableGraph.fromGraph(GraphDSL.create() { implicit builder: GraphDSL.Builder[Unit] =>
+
+      val source = builder.add(ThrottledProducer.produceThrottled(1 second, 30 milliseconds, 9000, "fastProducer"))
+      val fastSink = builder.add(Sink.actorSubscriber(Props(classOf[actors.DelayingActor], "fastSink")))
+      val slowingSink = builder.add(Sink.actorSubscriber(Props(classOf[SlowDownActor], "slowingDownSink", 50l)))
+      val broadcast = builder.add(Broadcast[String](2))
+
+      val bufferFlow = Flow[String].buffer(300, OverflowStrategy.dropHead)
+
+      import GraphDSL.Implicits._
+
+      source ~> broadcast.in
+      broadcast.out(0) ~> fastSink
+      broadcast.out(1) ~> bufferFlow ~> slowingSink
+
+      ClosedShape
+    })
+    theGraph
+  }
+
+  def fastPublisherFastSubscriberAndSlowingSubscriberWithBackpressureBuffer() = {
+
+    val theGraph = RunnableGraph.fromGraph(GraphDSL.create() { implicit builder: GraphDSL.Builder[Unit] =>
+
+      val source = builder.add(ThrottledProducer.produceThrottled(1 second, 30 milliseconds, 9000, "fastProducer"))
+      val fastSink = builder.add(Sink.actorSubscriber(Props(classOf[actors.DelayingActor], "fastSink")))
+      val slowingSink = builder.add(Sink.actorSubscriber(Props(classOf[SlowDownActor], "slowingDownSink", 50l)))
+      val broadcast = builder.add(Broadcast[String](2))
+
+      val bufferFlow = Flow[String].buffer(3500, OverflowStrategy.backpressure)
+
+      import GraphDSL.Implicits._
+
+      source ~> broadcast.in
+      broadcast.out(0) ~> fastSink
+      broadcast.out(1) ~> bufferFlow ~> slowingSink
+
+      ClosedShape
+    })
+    theGraph
+  }
+
+  def fastPublisherFastSubscriberAndSlowingSubscriberWithBalancer() = {
+
+    val theGraph = RunnableGraph.fromGraph(GraphDSL.create() { implicit builder: GraphDSL.Builder[Unit] =>
+
+      val source = builder.add(ThrottledProducer.produceThrottled(1 second, 30 milliseconds, 9000, "fastProducer"))
+      val fastSink = builder.add(Sink.actorSubscriber(Props(classOf[actors.DelayingActor], "fastSink")))
+      val slowingSink = builder.add(Sink.actorSubscriber(Props(classOf[SlowDownActor], "slowingDownSink", 50l)))
+      val balancer = builder.add(Balance[String](2))
+
+      import GraphDSL.Implicits._
+
+      source ~> balancer.in
+      balancer.out(0) ~> fastSink
+      balancer.out(1) ~> slowingSink
 
       ClosedShape
     })
