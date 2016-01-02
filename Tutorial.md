@@ -14,21 +14,6 @@ In an interesting turn of events, as I was building this application Typesafe re
 and V2.01 days later.  This new release of akka-streams introduced some significant changes to the framework and a 
 nnumber of changes class names and the methods used to build reactive streams.
 
-What We Will Cover
-===
-
-In this tutorial we will cover a range of related technologies:
-
-1.  Reactive Programming and why its useful.
-2.  Getting Started - Dependencies and Project Setup
-3.  Akka Streams and how to build Graphs
-    a.  Sources
-    b.  Flows
-    c.  Sinks
-    d.  Putting it all Together
-4.  Kamon and tracking what is happening in our application
-5.  Examples of backpressure
-
 The Basics - Overview
 ===
 
